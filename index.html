@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HE-CDER Staff Operations Board</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <div class="header-left">
+        <div class="logo-icon"></div>
+        <div>
+          <div class="header-title">HE-CDER // Staff Operations Board</div>
+          <div class="header-sub">City of Long Beach — Emergency Management</div>
+        </div>
+      </div>
+
+      <div class="header-center">
+        <div class="stat-pill">
+          <span class="stat-num navy" id="statStaff">0</span>
+          <span class="stat-label">Staff</span>
+        </div>
+        <div class="stat-pill">
+          <span class="stat-num cyan" id="statAssigned">0</span>
+          <span class="stat-label">Assigned</span>
+        </div>
+        <div class="stat-pill">
+          <span class="stat-num orange" id="statOpen">0</span>
+          <span class="stat-label">Open</span>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <div class="mode-badge view" id="modeBadge">👁 View Only</div>
+        <button class="btn btn-primary btn-sm" id="managerLoginBtn">Manager Login</button>
+        <button class="btn btn-ghost btn-sm hidden" id="lockBtn">Lock</button>
+        <button class="btn btn-ghost btn-sm" id="refreshBtn" title="Refresh">↺</button>
+      </div>
+    </div>
+
+    <div class="week-nav">
+      <button class="btn btn-ghost btn-sm" id="prevWeekBtn">← Prev</button>
+      <span class="week-label" id="weekLabel">Week of —</span>
+      <button class="btn btn-ghost btn-sm" id="nextWeekBtn">Next →</button>
+      <button class="btn btn-ghost btn-sm" id="todayBtn">Today</button>
+    </div>
+
+    <div class="legend" id="legend"></div>
+
+    <div class="status-bar loading" id="statusBar">⟳ Loading board data…</div>
+
+    <div class="main">
+      <div class="sidebar">
+        <div class="sidebar-header">
+          <span id="staffHeader">Staff (0)</span>
+        </div>
+        <div class="staff-list" id="staffList"></div>
+        <div class="sidebar-add hidden" id="sidebarAdd">
+          <button class="btn btn-ghost" id="addStaffToggle" style="width:100%;justify-content:center">+ Add Staff</button>
+          <div class="add-staff-form hidden" id="addStaffForm">
+            <input class="field-input" id="newStaffName" placeholder="Last, First" />
+            <select class="field-select" id="newStaffUnit"></select>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-primary btn-sm" id="addStaffBtn" style="flex:1">Add</button>
+              <button class="btn btn-ghost btn-sm" id="cancelAddStaffBtn" style="flex:1">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-area">
+        <div id="loadingMessage" class="loading-message">// Loading staff data from Google Sheets…</div>
+        <table class="grid-table hidden" id="gridTable">
+          <thead>
+            <tr id="gridHeader"></tr>
+          </thead>
+          <tbody id="gridBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden" id="pinOverlay">
+    <div class="modal" style="max-width:300px">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">Manager Access</div>
+          <div class="modal-sub">Enter PIN to enable editing</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="closePinBtn">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="pin-dots" id="pinDots"></div>
+        <div class="pin-error-msg" id="pinError"></div>
+        <div class="pin-keypad" id="pinKeypad"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden" id="assignmentOverlay">
+    <div class="modal">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title" id="modalStaffName">Staff</div>
+          <div class="modal-sub" id="modalDate">Date</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="closeAssignmentBtn">✕</button>
+      </div>
+      <div class="modal-body">
+        <div>
+          <div class="field-label">Location / Site</div>
+          <select class="field-select" id="modalLocation"></select>
+        </div>
+        <div>
+          <div class="field-label">Role / Task</div>
+          <select class="field-select" id="modalRole"></select>
+        </div>
+        <div>
+          <div class="field-label">Notes (optional)</div>
+          <input class="field-input" id="modalNote" placeholder="e.g. 0800–1600 shift" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-danger btn-sm hidden" id="clearAssignmentBtn">Clear</button>
+        <div style="flex:1"></div>
+        <button class="btn btn-ghost btn-sm" id="cancelAssignmentBtn">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="saveAssignmentBtn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
