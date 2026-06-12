@@ -3,7 +3,6 @@
 // Multiple assignments per person per day
 // Manager PIN can edit all rows
 // Staff PIN can edit only that staff person's row
-// TV kiosk mode + auto-scroll + 10-minute auto-refresh
 // Preserves current custom UNITS / LOCATIONS / ROLES
 // Fixed row height alignment
 // ─────────────────────────────────────────────
@@ -12,7 +11,7 @@ const DAY_SHORT = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 
 const UNITS = [
   { id: "BW SD Driver",  label: "San Diego Driver",          color: "#236092", bg: "#EAF6FA" },
-  { id: "BW SC Driver",  label: "Southcoast Driver",         color: "#FFA300", bg: "#FFF7E6" },
+  { id: "BW SC Driver",  label: "Soutcoast Driver",          color: "#FFA300", bg: "#FFF7E6" },
   { id: "Biowatch",      label: "Biowatch",                  color: "#05C3DE", bg: "#E6F9FC" },
   { id: "Logistics",     label: "Logistics",                 color: "#7B4FBF", bg: "#F3EEFF" },
   { id: "Logistics WH",  label: "Warehouse",                 color: "#E03C31", bg: "#FFF0EF" },
@@ -64,11 +63,6 @@ let savingKeys = new Set();
 let activeAssignment = null;
 let pinDigits = "";
 let pinSubmitting = false;
-
-let autoRefreshTimer = null;
-let autoScrollTimer = null;
-
-const AUTO_REFRESH_MS = 10 * 60 * 1000; // 10 minutes
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -125,18 +119,6 @@ function getWeekDays() {
   return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 }
 
-function getUrlParams() {
-  return new URLSearchParams(window.location.search);
-}
-
-function isTvMode() {
-  return getUrlParams().get("tv") === "1";
-}
-
-function isAutoScrollMode() {
-  return getUrlParams().get("scroll") === "1";
-}
-
 function canEditStaff(staffId) {
   if (!isEditMode) return false;
   if (accessMode === "manager") return true;
@@ -188,16 +170,22 @@ function getMaxAssignmentsForStaffInWeek(staffId) {
 
 function getRowHeightForStaff(staffId) {
   const maxAssignments = getMaxAssignmentsForStaffInWeek(staffId);
-  const baseRowHeight = isTvMode() ? 72 : 88;
+
+  /*
+    Base row must be taller than the empty grid cell.
+    Empty cell is 56px + 16px td padding + borders.
+    88px keeps left staff rows and right table rows aligned.
+  */
+  const baseRowHeight = 88;
 
   if (maxAssignments <= 0) {
     return baseRowHeight;
   }
 
-  const chipHeight = isTvMode() ? 48 : 58;
-  const gap = isTvMode() ? 4 : 6;
-  const cellPadding = isTvMode() ? 18 : 22;
-  const addAnotherHeight = canEditStaff(staffId) ? (isTvMode() ? 22 : 30) : 0;
+  const chipHeight = 58;
+  const gap = 6;
+  const cellPadding = 22;
+  const addAnotherHeight = canEditStaff(staffId) ? 30 : 0;
 
   return Math.max(
     baseRowHeight,
@@ -295,13 +283,11 @@ async function apiRemoveStaff(pin, staffId) {
 // ─────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", () => {
-  initTvKioskMode();
   bindButtons();
   populateDropdowns();
   renderLegend();
   buildPinPad();
   loadData();
-  startAutoRefresh();
 });
 
 function bindButtons() {
@@ -362,30 +348,6 @@ async function loadData() {
   }
 }
 
-function startAutoRefresh() {
-  if (autoRefreshTimer) {
-    clearInterval(autoRefreshTimer);
-  }
-
-  autoRefreshTimer = setInterval(async () => {
-    if (isEditMode) {
-      setStatus("ok", "Auto-refresh skipped while editing");
-      return;
-    }
-
-    try {
-      setStatus("loading", "Auto-refreshing board data…");
-      const data = await apiLoad();
-      staff = data.staff || [];
-      assignments = data.assignments || {};
-      setStatus("ok", `Auto-refreshed ${new Date().toLocaleTimeString()}`);
-      render();
-    } catch (err) {
-      setStatus("error", `Auto-refresh failed: ${err.message}`);
-    }
-  }, AUTO_REFRESH_MS);
-}
-
 // ─────────────────────────────────────────────
 // Render
 // ─────────────────────────────────────────────
@@ -396,10 +358,6 @@ function render() {
   renderStaffList();
   renderGrid();
   renderEditState();
-
-  if (isAutoScrollMode()) {
-    setTimeout(syncScrollPositions, 100);
-  }
 }
 
 function renderStats() {
@@ -450,7 +408,7 @@ function renderStaffList() {
     const editable = canEditStaff(s.id);
 
     return `
-      <div class="staff-row ${editable ? "clickable" : ""}" style="--row-height:${rowHeight}px;height:${rowHeight}px;min-height:${rowHeight}px">
+      <div class="staff-row ${editable ? "clickable" : ""}" style="--row-height:${rowHeight}px">
         <div class="unit-bar" style="background:${u.color}"></div>
         <div style="flex:1;min-width:0">
           <div class="staff-name">${escapeHtml(s.name)}</div>
@@ -500,7 +458,7 @@ function renderGrid() {
     const rowHeight = getRowHeightForStaff(s.id);
 
     return `
-      <tr style="--row-height:${rowHeight}px;height:${rowHeight}px;min-height:${rowHeight}px">
+      <tr>
         ${weekDays.map(day => {
           const isoDate = fmtISO(day);
           const u = unitMeta(s.unit);
@@ -511,7 +469,7 @@ function renderGrid() {
             <td class="${isToday(day) ? "today-col" : ""} ${editable ? "editable" : ""}"
                 data-staff-id="${escapeHtml(s.id)}"
                 data-date="${isoDate}"
-                style="--row-height:${rowHeight}px;height:${rowHeight}px;min-height:${rowHeight}px">
+                style="--row-height:${rowHeight}px">
               
               <div class="assignment-stack">
                 ${dayAssignments.map(asgn => `
@@ -937,99 +895,5 @@ async function clearAssignment() {
     savingKeys.delete(key);
     setStatus("error", `Clear failed: ${err.message}`);
     await loadData();
-  }
-}
-
-// ─────────────────────────────────────────────
-// TV / KIOSK MODE
-// Normal:             your-link
-// Compact TV:         your-link?tv=1
-// Compact + scroll:   your-link?tv=1&scroll=1
-// ─────────────────────────────────────────────
-
-function initTvKioskMode() {
-  if (isTvMode()) {
-    document.body.classList.add("tv-mode");
-  }
-
-  if (isAutoScrollMode()) {
-    document.body.classList.add("auto-scroll-mode");
-
-    setTimeout(() => {
-      startAutoScroll();
-    }, 3500);
-  }
-}
-
-function startAutoScroll() {
-  stopAutoScroll();
-
-  const gridArea = document.querySelector(".grid-area");
-  const staffList = document.querySelector(".staff-list");
-
-  if (!gridArea || !staffList) return;
-
-  gridArea.scrollTop = 0;
-  staffList.scrollTop = 0;
-
-  let direction = 1;
-  let pauseUntil = Date.now() + 6000;
-
-  autoScrollTimer = setInterval(() => {
-    if (!isAutoScrollMode()) return;
-    if (isEditMode) return;
-
-    const maxGridScroll = Math.max(0, gridArea.scrollHeight - gridArea.clientHeight);
-    const maxStaffScroll = Math.max(0, staffList.scrollHeight - staffList.clientHeight);
-
-    if (maxGridScroll <= 0 && maxStaffScroll <= 0) return;
-
-    if (Date.now() < pauseUntil) return;
-
-    const speed = 1;
-
-    gridArea.scrollTop += speed * direction;
-
-    if (maxGridScroll > 0 && maxStaffScroll > 0) {
-      const ratio = gridArea.scrollTop / maxGridScroll;
-      staffList.scrollTop = ratio * maxStaffScroll;
-    } else {
-      staffList.scrollTop += speed * direction;
-    }
-
-    const atBottom = gridArea.scrollTop >= maxGridScroll - 2;
-    const atTop = gridArea.scrollTop <= 2;
-
-    if (direction === 1 && atBottom) {
-      pauseUntil = Date.now() + 9000;
-      direction = -1;
-    }
-
-    if (direction === -1 && atTop) {
-      pauseUntil = Date.now() + 7000;
-      direction = 1;
-    }
-  }, 45);
-}
-
-function stopAutoScroll() {
-  if (autoScrollTimer) {
-    clearInterval(autoScrollTimer);
-    autoScrollTimer = null;
-  }
-}
-
-function syncScrollPositions() {
-  const gridArea = document.querySelector(".grid-area");
-  const staffList = document.querySelector(".staff-list");
-
-  if (!gridArea || !staffList) return;
-
-  const maxGridScroll = Math.max(0, gridArea.scrollHeight - gridArea.clientHeight);
-  const maxStaffScroll = Math.max(0, staffList.scrollHeight - staffList.clientHeight);
-
-  if (maxGridScroll > 0 && maxStaffScroll > 0) {
-    const ratio = gridArea.scrollTop / maxGridScroll;
-    staffList.scrollTop = ratio * maxStaffScroll;
   }
 }
