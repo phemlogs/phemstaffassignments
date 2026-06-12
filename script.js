@@ -8,36 +8,36 @@
 const DAY_SHORT = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 
 const UNITS = [
-  { id: "epi",       label: "Epidemiology",        color: "#236092", bg: "#EAF6FA" },
-  { id: "biowatch",  label: "Biowatch",            color: "#FFA300", bg: "#FFF7E6" },
-  { id: "vaccines",  label: "Vaccines",            color: "#05C3DE", bg: "#E6F9FC" },
-  { id: "lab",       label: "Public Health Lab",   color: "#7B4FBF", bg: "#F3EEFF" },
-  { id: "Logistics", label: "Logistics", color: "#E03C31", bg: "#FFF0EF" },
-  { id: "narcan",    label: "Narcan Distribution", color: "#008B8B", bg: "#E6F5F5" },
+  { id: "BW SD Driver",       label: "San Diego Driver",        color: "#236092", bg: "#EAF6FA" },
+  { id: "BW SC Driver",  label: "Soutcoast Driver",            color: "#FFA300", bg: "#FFF7E6" },
+  { id: "Biowatch",  label: "Biowatch",            color: "#05C3DE", bg: "#E6F9FC" },
+  { id: "Logistics",       label: "Logistics",   color: "#7B4FBF", bg: "#F3EEFF" },
+  { id: "Logistics WH", label: "Warehouse", color: "#E03C31", bg: "#FFF0EF" },
+  { id: "Logistics GS",    label: "Logistics Ground Support", color: "#008B8B", bg: "#E6F5F5" },
   { id: "admin",     label: "Admin / Other",       color: "#6D7378", bg: "#F7FAFC" }
 ];
 
 const LOCATIONS = [
   "Worsham Warehouse",
-  "Office",
-  "EOC",
-  "Field",
-  "San Diego",
+  "Worsham Office",
+  "Long Beach",
+  "Riverside",
+  "San Diego A",
+  "San Diego B",
   "Pasadena",
-  "FIFA Event Site",
-  "Convention Center",
-  "Mobile Screen Deployment",
+  "San Bernardino",
+  "Orange County",
+  "TV Screen Deployment",
   "Remote / WFH",
   "Leave / Off"
 ];
 
 const ROLES = [
-  "San Diego Route",
-  "FIFA Screen Deployment",
-  "Warehouse Receiving",
-  "Inventory / Sortly",
+  "Driving",
+  "TV Screen Deployment",
+  "Warehouse Floor",
   "BioWatch",
-  "Narcan Distribution",
+  "Administrative",
   "Pickup / Delivery",
   "Fleet / Vehicle Support",
   "Training",
