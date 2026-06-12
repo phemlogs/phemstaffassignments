@@ -12,7 +12,7 @@ const UNITS = [
   { id: "biowatch",  label: "Biowatch",            color: "#FFA300", bg: "#FFF7E6" },
   { id: "vaccines",  label: "Vaccines",            color: "#05C3DE", bg: "#E6F9FC" },
   { id: "lab",       label: "Public Health Lab",   color: "#7B4FBF", bg: "#F3EEFF" },
-  { id: "warehouse", label: "Emergency Warehouse", color: "#E03C31", bg: "#FFF0EF" },
+  { id: "Logistics", label: "Logistics", color: "#E03C31", bg: "#FFF0EF" },
   { id: "narcan",    label: "Narcan Distribution", color: "#008B8B", bg: "#E6F5F5" },
   { id: "admin",     label: "Admin / Other",       color: "#6D7378", bg: "#F7FAFC" }
 ];
@@ -625,7 +625,7 @@ function hideAddStaffForm() {
   const unit = document.getElementById("newStaffUnit");
 
   if (name) name.value = "";
-  if (unit) unit.value = "warehouse";
+  if (unit) unit.value = "Logistics";
 }
 
 async function handleAddStaff() {
