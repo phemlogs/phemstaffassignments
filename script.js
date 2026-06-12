@@ -1,8 +1,7 @@
 // ─────────────────────────────────────────────
 // PHEM Staff Assignments
-// Plain GitHub Pages frontend
+// Multiple assignments per person per day
 // Matches current index.html IDs
-// Uses Claude-style Apps Script backend
 // ─────────────────────────────────────────────
 
 const DAY_SHORT = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
@@ -98,6 +97,10 @@ function assignKey(staffId, date) {
   return `${staffId}__${fmtISO(date)}`;
 }
 
+function newAssignmentKey(staffId, isoDate) {
+  return `${staffId}__${isoDate}__${makeId()}`;
+}
+
 function escapeHtml(value) {
   return String(value || "")
     .replaceAll("&", "&amp;")
@@ -126,8 +129,39 @@ function setStatus(type, msg) {
   bar.textContent = icon + msg;
 }
 
+function getAssignmentsForStaffDay(staffId, isoDate) {
+  return Object.entries(assignments)
+    .map(([key, value]) => ({ key, ...value }))
+    .filter(a => String(a.staffId) === String(staffId) && String(a.date) === String(isoDate))
+    .sort((a, b) => {
+      const an = a.note || "";
+      const bn = b.note || "";
+      return an.localeCompare(bn);
+    });
+}
+
+function getMaxAssignmentsForStaffInWeek(staffId) {
+  const days = getWeekDays();
+
+  let max = 1;
+
+  days.forEach(day => {
+    const count = getAssignmentsForStaffDay(staffId, fmtISO(day)).length;
+    if (count > max) max = count;
+  });
+
+  return max;
+}
+
+function getRowHeightForStaff(staffId) {
+  const maxAssignments = getMaxAssignmentsForStaffInWeek(staffId);
+
+  // Base row is 78px. Each extra assignment adds space.
+  return 78 + Math.max(0, maxAssignments - 1) * 58;
+}
+
 // ─────────────────────────────────────────────
-// API — Claude backend compatible
+// API
 // ─────────────────────────────────────────────
 
 async function apiLoad() {
@@ -135,14 +169,17 @@ async function apiLoad() {
     throw new Error("Missing Apps Script URL in config.js");
   }
 
-  // IMPORTANT:
-  // Do NOT send action=load.
-  // Claude's original Apps Script doGet() just loads data.
   const res = await fetch(SCRIPT_URL);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
 
   const data = await res.json();
-  if (!data.ok) throw new Error(data.error || "Load failed");
+
+  if (!data.ok) {
+    throw new Error(data.error || "Load failed");
+  }
 
   return data;
 }
@@ -156,10 +193,15 @@ async function apiPost(payload) {
     body: JSON.stringify(payload)
   });
 
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
 
   const data = await res.json();
-  if (!data.ok) throw new Error(data.error || "Save failed");
+
+  if (!data.ok) {
+    throw new Error(data.error || "Save failed");
+  }
 
   return data;
 }
@@ -277,19 +319,22 @@ function render() {
 
 function renderStats() {
   const weekDays = getWeekDays();
-  const totalSlots = staff.length * 7;
+  const totalStaffDays = staff.length * 7;
 
-  let filledSlots = 0;
+  let assignmentCount = 0;
+  let daysWithNoAssignment = 0;
 
-  weekDays.forEach(day => {
-    staff.forEach(s => {
-      if (assignments[assignKey(s.id, day)]) filledSlots++;
+  staff.forEach(s => {
+    weekDays.forEach(day => {
+      const count = getAssignmentsForStaffDay(s.id, fmtISO(day)).length;
+      assignmentCount += count;
+      if (count === 0) daysWithNoAssignment++;
     });
   });
 
   document.getElementById("statStaff").textContent = staff.length;
-  document.getElementById("statAssigned").textContent = filledSlots;
-  document.getElementById("statOpen").textContent = totalSlots - filledSlots;
+  document.getElementById("statAssigned").textContent = assignmentCount;
+  document.getElementById("statOpen").textContent = daysWithNoAssignment;
   document.getElementById("staffHeader").textContent = `Staff (${staff.length})`;
 }
 
@@ -308,7 +353,7 @@ function renderLegend() {
       ${escapeHtml(u.label)}
     </span>
   `).join("") + `
-    <span class="edit-hint hidden" id="editHint">// click any cell to assign</span>
+    <span class="edit-hint hidden" id="editHint">// click a cell to add, click a chip to edit</span>
   `;
 }
 
@@ -317,9 +362,10 @@ function renderStaffList() {
 
   staffList.innerHTML = staff.map(s => {
     const u = unitMeta(s.unit);
+    const rowHeight = getRowHeightForStaff(s.id);
 
     return `
-      <div class="staff-row ${isEditMode ? "clickable" : ""}">
+      <div class="staff-row ${isEditMode ? "clickable" : ""}" style="height:${rowHeight}px;min-height:${rowHeight}px">
         <div class="unit-bar" style="background:${u.color}"></div>
         <div style="flex:1;min-width:0">
           <div class="staff-name">${escapeHtml(s.name)}</div>
@@ -365,46 +411,64 @@ function renderGrid() {
     </th>
   `).join("");
 
-  gridBody.innerHTML = staff.map(s => `
-    <tr>
-      ${weekDays.map(day => {
-        const key = assignKey(s.id, day);
-        const asgn = assignments[key];
-        const u = unitMeta(s.unit);
-        const saving = savingKeys.has(key);
+  gridBody.innerHTML = staff.map(s => {
+    const rowHeight = getRowHeightForStaff(s.id);
 
-        if (asgn) {
+    return `
+      <tr>
+        ${weekDays.map(day => {
+          const isoDate = fmtISO(day);
+          const u = unitMeta(s.unit);
+          const dayAssignments = getAssignmentsForStaffDay(s.id, isoDate);
+
           return `
             <td class="${isToday(day) ? "today-col" : ""} ${isEditMode ? "editable" : ""}"
                 data-staff-id="${escapeHtml(s.id)}"
-                data-date="${fmtISO(day)}">
-              <div class="assignment-chip ${saving ? "saving" : ""}"
-                   style="background:${u.bg};border-left:3px solid ${u.color}">
-                <div class="chip-role" style="color:${u.color}">${escapeHtml(asgn.role || "—")}</div>
-                <div class="chip-location" style="color:${u.color}">${escapeHtml(asgn.location || "—")}</div>
-                <div class="chip-note" style="color:${u.color}">${escapeHtml(asgn.note || "")}</div>
+                data-date="${isoDate}"
+                style="height:${rowHeight}px;min-height:${rowHeight}px">
+              
+              <div class="assignment-stack">
+                ${dayAssignments.map(asgn => `
+                  <div class="assignment-chip mini-chip ${savingKeys.has(asgn.key) ? "saving" : ""}"
+                       data-assignment-key="${escapeHtml(asgn.key)}"
+                       data-staff-id="${escapeHtml(s.id)}"
+                       data-date="${isoDate}"
+                       style="background:${u.bg};border-left:3px solid ${u.color}">
+                    <div class="chip-role" style="color:${u.color}">${escapeHtml(asgn.role || "—")}</div>
+                    <div class="chip-location" style="color:${u.color}">${escapeHtml(asgn.location || "—")}</div>
+                    <div class="chip-note" style="color:${u.color}">${escapeHtml(asgn.note || "")}</div>
+                  </div>
+                `).join("")}
+
+                ${dayAssignments.length === 0 ? `
+                  <div class="empty-cell">
+                    ${isEditMode ? `<span class="empty-cell-plus">+</span>` : ""}
+                  </div>
+                ` : ""}
+
+                ${dayAssignments.length > 0 && isEditMode ? `
+                  <div class="add-another">+ add another</div>
+                ` : ""}
               </div>
             </td>
           `;
-        }
-
-        return `
-          <td class="${isToday(day) ? "today-col" : ""} ${isEditMode ? "editable" : ""}"
-              data-staff-id="${escapeHtml(s.id)}"
-              data-date="${fmtISO(day)}">
-            <div class="empty-cell">
-              ${isEditMode ? `<span class="empty-cell-plus">+</span>` : ""}
-            </div>
-          </td>
-        `;
-      }).join("")}
-    </tr>
-  `).join("");
+        }).join("")}
+      </tr>
+    `;
+  }).join("");
 
   document.querySelectorAll("#gridBody td").forEach(cell => {
     cell.addEventListener("click", () => {
       if (!isEditMode) return;
-      openAssignmentOverlay(cell.dataset.staffId, cell.dataset.date);
+      openAssignmentOverlay(cell.dataset.staffId, cell.dataset.date, null);
+    });
+  });
+
+  document.querySelectorAll(".assignment-chip").forEach(chip => {
+    chip.addEventListener("click", e => {
+      e.stopPropagation();
+      if (!isEditMode) return;
+      openAssignmentOverlay(chip.dataset.staffId, chip.dataset.date, chip.dataset.assignmentKey);
     });
   });
 }
@@ -602,19 +666,20 @@ async function handleRemoveStaff(id, name) {
 // Assignments
 // ─────────────────────────────────────────────
 
-function openAssignmentOverlay(staffId, isoDate) {
+function openAssignmentOverlay(staffId, isoDate, assignmentKey) {
   const s = staff.find(x => x.id === staffId);
   if (!s) return;
 
   const day = new Date(isoDate + "T00:00:00");
-  const key = `${staffId}__${isoDate}`;
-  const existing = assignments[key];
+  const existing = assignmentKey ? assignments[assignmentKey] : null;
 
   activeAssignment = {
     staffId,
     staffName: s.name,
     day,
-    key
+    isoDate,
+    key: assignmentKey || newAssignmentKey(staffId, isoDate),
+    isExisting: Boolean(existing)
   };
 
   document.getElementById("modalStaffName").textContent = s.name;
@@ -640,7 +705,7 @@ async function saveAssignment() {
   const role = document.getElementById("modalRole").value;
   const note = document.getElementById("modalNote").value;
 
-  const { staffId, day, key } = activeAssignment;
+  const { staffId, isoDate, key } = activeAssignment;
 
   closeAssignmentOverlay();
 
@@ -648,8 +713,9 @@ async function saveAssignment() {
     delete assignments[key];
   } else {
     assignments[key] = {
+      key,
       staffId,
-      date: fmtISO(day),
+      date: isoDate,
       location,
       role,
       note
@@ -662,7 +728,7 @@ async function saveAssignment() {
   setStatus("saving", "Saving…");
 
   try {
-    await apiSetAssignment(managerPin, key, staffId, fmtISO(day), location, role, note);
+    await apiSetAssignment(managerPin, key, staffId, isoDate, location, role, note);
     savingKeys.delete(key);
     setStatus("saved", `Saved · ${new Date().toLocaleTimeString()}`);
     await loadData();
@@ -681,7 +747,7 @@ async function saveAssignment() {
 async function clearAssignment() {
   if (!activeAssignment) return;
 
-  const { staffId, day, key } = activeAssignment;
+  const { staffId, isoDate, key } = activeAssignment;
 
   closeAssignmentOverlay();
 
@@ -692,7 +758,7 @@ async function clearAssignment() {
   setStatus("saving", "Clearing…");
 
   try {
-    await apiSetAssignment(managerPin, key, staffId, fmtISO(day), "", "", "");
+    await apiSetAssignment(managerPin, key, staffId, isoDate, "", "", "");
     savingKeys.delete(key);
     setStatus("saved", `Cleared · ${new Date().toLocaleTimeString()}`);
     await loadData();
