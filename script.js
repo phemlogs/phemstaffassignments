@@ -1,20 +1,21 @@
 // ─────────────────────────────────────────────
 // PHEM Staff Assignments
 // Multiple assignments per person per day
-// Matches current index.html IDs
-// Dynamic row height fix so multiple chips do not overlap staff
+// Manager PIN can edit all rows
+// Staff PIN can edit only that staff person's row
+// Preserves current custom UNITS / LOCATIONS / ROLES
 // ─────────────────────────────────────────────
 
 const DAY_SHORT = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 
 const UNITS = [
-  { id: "BW SD Driver",       label: "San Diego Driver",        color: "#236092", bg: "#EAF6FA" },
-  { id: "BW SC Driver",  label: "Soutcoast Driver",            color: "#FFA300", bg: "#FFF7E6" },
-  { id: "Biowatch",  label: "Biowatch",            color: "#05C3DE", bg: "#E6F9FC" },
-  { id: "Logistics",       label: "Logistics",   color: "#7B4FBF", bg: "#F3EEFF" },
-  { id: "Logistics WH", label: "Warehouse", color: "#E03C31", bg: "#FFF0EF" },
-  { id: "Logistics GS",    label: "Logistics Ground Support", color: "#008B8B", bg: "#E6F5F5" },
-  { id: "admin",     label: "Admin / Other",       color: "#6D7378", bg: "#F7FAFC" }
+  { id: "BW SD Driver",  label: "San Diego Driver",          color: "#236092", bg: "#EAF6FA" },
+  { id: "BW SC Driver",  label: "Soutcoast Driver",          color: "#FFA300", bg: "#FFF7E6" },
+  { id: "Biowatch",      label: "Biowatch",                  color: "#05C3DE", bg: "#E6F9FC" },
+  { id: "Logistics",     label: "Logistics",                 color: "#7B4FBF", bg: "#F3EEFF" },
+  { id: "Logistics WH",  label: "Warehouse",                 color: "#E03C31", bg: "#FFF0EF" },
+  { id: "Logistics GS",  label: "Logistics Ground Support",  color: "#008B8B", bg: "#E6F5F5" },
+  { id: "admin",         label: "Admin / Other",             color: "#6D7378", bg: "#F7FAFC" }
 ];
 
 const LOCATIONS = [
@@ -50,11 +51,17 @@ const ROLES = [
 let staff = [];
 let assignments = {};
 let weekStart = getMondayOfWeek(new Date());
+
 let isEditMode = false;
-let managerPin = "";
+let accessMode = "view"; // view | manager | staff
+let activePin = "";
+let allowedStaffId = "";
+let allowedStaffName = "";
+
 let savingKeys = new Set();
 let activeAssignment = null;
 let pinDigits = "";
+let pinSubmitting = false;
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -94,10 +101,6 @@ function isToday(d) {
   return d.toDateString() === new Date().toDateString();
 }
 
-function assignKey(staffId, date) {
-  return `${staffId}__${fmtISO(date)}`;
-}
-
 function newAssignmentKey(staffId, isoDate) {
   return `${staffId}__${isoDate}__${makeId()}`;
 }
@@ -113,6 +116,17 @@ function escapeHtml(value) {
 
 function getWeekDays() {
   return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+}
+
+function canEditStaff(staffId) {
+  if (!isEditMode) return false;
+  if (accessMode === "manager") return true;
+  if (accessMode === "staff" && String(allowedStaffId) === String(staffId)) return true;
+  return false;
+}
+
+function canManageStaff() {
+  return isEditMode && accessMode === "manager";
 }
 
 function setStatus(type, msg) {
@@ -163,7 +177,7 @@ function getRowHeightForStaff(staffId) {
   const chipHeight = 58;
   const gap = 6;
   const cellPadding = 22;
-  const addAnotherHeight = isEditMode ? 30 : 0;
+  const addAnotherHeight = canEditStaff(staffId) ? 30 : 0;
 
   return Math.max(
     78,
@@ -218,6 +232,13 @@ async function apiPost(payload) {
   }
 
   return data;
+}
+
+async function apiVerifyPin(pin) {
+  return apiPost({
+    action: "verifyPin",
+    pin
+  });
 }
 
 async function apiSetAssignment(pin, key, staffId, date, location, role, note) {
@@ -366,7 +387,7 @@ function renderLegend() {
       ${escapeHtml(u.label)}
     </span>
   `).join("") + `
-    <span class="edit-hint hidden" id="editHint">// click a cell to add, click a chip to edit</span>
+    <span class="edit-hint hidden" id="editHint">// staff codes unlock one row only</span>
   `;
 }
 
@@ -376,15 +397,16 @@ function renderStaffList() {
   staffList.innerHTML = staff.map(s => {
     const u = unitMeta(s.unit);
     const rowHeight = getRowHeightForStaff(s.id);
+    const editable = canEditStaff(s.id);
 
     return `
-      <div class="staff-row ${isEditMode ? "clickable" : ""}" style="--row-height:${rowHeight}px">
+      <div class="staff-row ${editable ? "clickable" : ""}" style="--row-height:${rowHeight}px">
         <div class="unit-bar" style="background:${u.color}"></div>
         <div style="flex:1;min-width:0">
           <div class="staff-name">${escapeHtml(s.name)}</div>
           <div class="staff-unit-tag">${escapeHtml(u.label)}</div>
         </div>
-        ${isEditMode ? `
+        ${canManageStaff() ? `
           <button class="staff-remove" data-staff-id="${escapeHtml(s.id)}" data-staff-name="${escapeHtml(s.name)}">×</button>
         ` : ""}
       </div>
@@ -409,7 +431,7 @@ function renderGrid() {
 
   if (!staff.length) {
     loadingMessage.classList.remove("hidden");
-    loadingMessage.textContent = "// No staff loaded yet. Use Manager Login → Add Staff.";
+    loadingMessage.textContent = "// No staff loaded yet. Use Edit Login → Add Staff.";
     gridTable.classList.add("hidden");
     return;
   }
@@ -433,9 +455,10 @@ function renderGrid() {
           const isoDate = fmtISO(day);
           const u = unitMeta(s.unit);
           const dayAssignments = getAssignmentsForStaffDay(s.id, isoDate);
+          const editable = canEditStaff(s.id);
 
           return `
-            <td class="${isToday(day) ? "today-col" : ""} ${isEditMode ? "editable" : ""}"
+            <td class="${isToday(day) ? "today-col" : ""} ${editable ? "editable" : ""}"
                 data-staff-id="${escapeHtml(s.id)}"
                 data-date="${isoDate}"
                 style="--row-height:${rowHeight}px">
@@ -455,11 +478,11 @@ function renderGrid() {
 
                 ${dayAssignments.length === 0 ? `
                   <div class="empty-cell">
-                    ${isEditMode ? `<span class="empty-cell-plus">+</span>` : ""}
+                    ${editable ? `<span class="empty-cell-plus">+</span>` : ""}
                   </div>
                 ` : ""}
 
-                ${dayAssignments.length > 0 && isEditMode ? `
+                ${dayAssignments.length > 0 && editable ? `
                   <div class="add-another">+ add another</div>
                 ` : ""}
               </div>
@@ -472,7 +495,7 @@ function renderGrid() {
 
   document.querySelectorAll("#gridBody td").forEach(cell => {
     cell.addEventListener("click", () => {
-      if (!isEditMode) return;
+      if (!canEditStaff(cell.dataset.staffId)) return;
       openAssignmentOverlay(cell.dataset.staffId, cell.dataset.date, null);
     });
   });
@@ -480,7 +503,7 @@ function renderGrid() {
   document.querySelectorAll(".assignment-chip").forEach(chip => {
     chip.addEventListener("click", e => {
       e.stopPropagation();
-      if (!isEditMode) return;
+      if (!canEditStaff(chip.dataset.staffId)) return;
       openAssignmentOverlay(chip.dataset.staffId, chip.dataset.date, chip.dataset.assignmentKey);
     });
   });
@@ -494,11 +517,22 @@ function renderEditState() {
   const editHint = document.getElementById("editHint");
 
   if (isEditMode) {
-    modeBadge.textContent = "✎ Edit Mode";
+    if (accessMode === "manager") {
+      modeBadge.textContent = "✎ Manager Mode";
+    } else {
+      modeBadge.textContent = `✎ ${allowedStaffName || "Staff"} Row`;
+    }
+
     modeBadge.className = "mode-badge edit";
     managerLoginBtn.classList.add("hidden");
     lockBtn.classList.remove("hidden");
-    sidebarAdd.classList.remove("hidden");
+
+    if (canManageStaff()) {
+      sidebarAdd.classList.remove("hidden");
+    } else {
+      sidebarAdd.classList.add("hidden");
+    }
+
     editHint?.classList.remove("hidden");
   } else {
     modeBadge.textContent = "👁 View Only";
@@ -559,6 +593,7 @@ function buildPinPad() {
 
 function openPinOverlay() {
   pinDigits = "";
+  pinSubmitting = false;
   updatePinDots();
   document.getElementById("pinError").textContent = "";
   document.getElementById("pinOverlay").classList.remove("hidden");
@@ -567,28 +602,68 @@ function openPinOverlay() {
 function closePinOverlay() {
   document.getElementById("pinOverlay").classList.add("hidden");
   pinDigits = "";
+  pinSubmitting = false;
   updatePinDots();
 }
 
-function pinPress(num) {
+async function pinPress(num) {
+  if (pinSubmitting) return;
   if (pinDigits.length >= 4) return;
 
   pinDigits += String(num);
   updatePinDots();
 
   if (pinDigits.length === 4) {
-    setTimeout(() => {
-      managerPin = pinDigits;
-      isEditMode = true;
-      closePinOverlay();
-      render();
-    }, 120);
+    await submitPin();
   }
 }
 
 function pinDelete() {
+  if (pinSubmitting) return;
+
   pinDigits = pinDigits.slice(0, -1);
   updatePinDots();
+  document.getElementById("pinError").textContent = "";
+}
+
+async function submitPin() {
+  pinSubmitting = true;
+  const pin = pinDigits;
+  const pinError = document.getElementById("pinError");
+
+  pinError.textContent = "Checking code…";
+
+  try {
+    const data = await apiVerifyPin(pin);
+
+    activePin = pin;
+    accessMode = data.accessMode || "view";
+    allowedStaffId = data.staffId || "";
+    allowedStaffName = data.staffName || "";
+
+    isEditMode = accessMode === "manager" || accessMode === "staff";
+
+    closePinOverlay();
+
+    if (accessMode === "manager") {
+      setStatus("saved", "Manager mode unlocked");
+    } else {
+      setStatus("saved", `${allowedStaffName} row unlocked`);
+    }
+
+    render();
+
+  } catch (err) {
+    pinError.textContent = "Invalid code";
+    document.querySelectorAll(".pin-dot").forEach(dot => dot.classList.add("error"));
+
+    setTimeout(() => {
+      pinDigits = "";
+      pinSubmitting = false;
+      updatePinDots();
+      pinError.textContent = "";
+    }, 700);
+  }
 }
 
 function updatePinDots() {
@@ -600,7 +675,10 @@ function updatePinDots() {
 
 function exitEditMode() {
   isEditMode = false;
-  managerPin = "";
+  accessMode = "view";
+  activePin = "";
+  allowedStaffId = "";
+  allowedStaffName = "";
   render();
 }
 
@@ -609,6 +687,8 @@ function exitEditMode() {
 // ─────────────────────────────────────────────
 
 function showAddStaffForm() {
+  if (!canManageStaff()) return;
+
   document.getElementById("addStaffToggle").classList.add("hidden");
   document.getElementById("addStaffForm").classList.remove("hidden");
   document.getElementById("newStaffName").focus();
@@ -629,6 +709,11 @@ function hideAddStaffForm() {
 }
 
 async function handleAddStaff() {
+  if (!canManageStaff()) {
+    setStatus("error", "Manager PIN required to add staff");
+    return;
+  }
+
   const name = document.getElementById("newStaffName").value.trim();
   const unit = document.getElementById("newStaffUnit").value;
 
@@ -638,7 +723,8 @@ async function handleAddStaff() {
     id: makeId(),
     name,
     unit,
-    active: true
+    active: true,
+    staffPin: ""
   };
 
   staff.push(s);
@@ -648,7 +734,7 @@ async function handleAddStaff() {
   setStatus("saving", "Adding staff…");
 
   try {
-    await apiAddStaff(managerPin, s);
+    await apiAddStaff(activePin, s);
     setStatus("saved", `${name} added`);
     await loadData();
   } catch (err) {
@@ -658,6 +744,11 @@ async function handleAddStaff() {
 }
 
 async function handleRemoveStaff(id, name) {
+  if (!canManageStaff()) {
+    setStatus("error", "Manager PIN required to remove staff");
+    return;
+  }
+
   if (!confirm(`Remove ${name} from the board?`)) return;
 
   staff = staff.filter(s => s.id !== id);
@@ -666,7 +757,7 @@ async function handleRemoveStaff(id, name) {
   setStatus("saving", `Removing ${name}…`);
 
   try {
-    await apiRemoveStaff(managerPin, id);
+    await apiRemoveStaff(activePin, id);
     setStatus("saved", `${name} removed`);
     await loadData();
   } catch (err) {
@@ -680,6 +771,11 @@ async function handleRemoveStaff(id, name) {
 // ─────────────────────────────────────────────
 
 function openAssignmentOverlay(staffId, isoDate, assignmentKey) {
+  if (!canEditStaff(staffId)) {
+    setStatus("error", "You can only edit your own row");
+    return;
+  }
+
   const s = staff.find(x => x.id === staffId);
   if (!s) return;
 
@@ -720,6 +816,12 @@ async function saveAssignment() {
 
   const { staffId, isoDate, key } = activeAssignment;
 
+  if (!canEditStaff(staffId)) {
+    setStatus("error", "You can only edit your own row");
+    closeAssignmentOverlay();
+    return;
+  }
+
   closeAssignmentOverlay();
 
   if (!location && !role && !note) {
@@ -741,7 +843,7 @@ async function saveAssignment() {
   setStatus("saving", "Saving…");
 
   try {
-    await apiSetAssignment(managerPin, key, staffId, isoDate, location, role, note);
+    await apiSetAssignment(activePin, key, staffId, isoDate, location, role, note);
     savingKeys.delete(key);
     setStatus("saved", `Saved · ${new Date().toLocaleTimeString()}`);
     await loadData();
@@ -762,6 +864,12 @@ async function clearAssignment() {
 
   const { staffId, isoDate, key } = activeAssignment;
 
+  if (!canEditStaff(staffId)) {
+    setStatus("error", "You can only edit your own row");
+    closeAssignmentOverlay();
+    return;
+  }
+
   closeAssignmentOverlay();
 
   delete assignments[key];
@@ -771,7 +879,7 @@ async function clearAssignment() {
   setStatus("saving", "Clearing…");
 
   try {
-    await apiSetAssignment(managerPin, key, staffId, isoDate, "", "", "");
+    await apiSetAssignment(activePin, key, staffId, isoDate, "", "", "");
     savingKeys.delete(key);
     setStatus("saved", `Cleared · ${new Date().toLocaleTimeString()}`);
     await loadData();
