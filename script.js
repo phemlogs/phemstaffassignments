@@ -2,6 +2,7 @@
 // PHEM Staff Assignments
 // Plain GitHub Pages frontend
 // Matches current index.html IDs
+// Uses Claude-style Apps Script backend
 // ─────────────────────────────────────────────
 
 const DAY_SHORT = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
@@ -53,7 +54,6 @@ let isEditMode = false;
 let managerPin = "";
 let savingKeys = new Set();
 let activeAssignment = null;
-
 let pinDigits = "";
 
 // ─────────────────────────────────────────────
@@ -127,59 +127,45 @@ function setStatus(type, msg) {
 }
 
 // ─────────────────────────────────────────────
-// JSONP API
+// API — Claude backend compatible
 // ─────────────────────────────────────────────
 
-function jsonp(params = {}) {
-  return new Promise((resolve, reject) => {
-    if (!SCRIPT_URL || SCRIPT_URL.includes("YOUR_APPS_SCRIPT_WEB_APP_URL_HERE")) {
-      reject(new Error("Missing Apps Script URL in config.js"));
-      return;
-    }
+async function apiLoad() {
+  if (!SCRIPT_URL || SCRIPT_URL.includes("YOUR_APPS_SCRIPT_WEB_APP_URL_HERE")) {
+    throw new Error("Missing Apps Script URL in config.js");
+  }
 
-    const callbackName = "jsonp_cb_" + Math.random().toString(36).slice(2);
-    const url = new URL(SCRIPT_URL);
+  // IMPORTANT:
+  // Do NOT send action=load.
+  // Claude's original Apps Script doGet() just loads data.
+  const res = await fetch(SCRIPT_URL);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-    Object.entries(params).forEach(([key, value]) => {
-      if (typeof value === "object") {
-        url.searchParams.set(key, JSON.stringify(value));
-      } else {
-        url.searchParams.set(key, value);
-      }
-    });
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || "Load failed");
 
-    url.searchParams.set("callback", callbackName);
-
-    const script = document.createElement("script");
-
-    window[callbackName] = function(data) {
-      cleanup();
-      resolve(data);
-    };
-
-    script.onerror = function() {
-      cleanup();
-      reject(new Error("Could not reach Apps Script"));
-    };
-
-    function cleanup() {
-      delete window[callbackName];
-      script.remove();
-    }
-
-    script.src = url.toString();
-    document.body.appendChild(script);
-  });
+  return data;
 }
 
-async function apiLoad() {
-  const data = await jsonp({ action: "load" });
-  if (!data.ok) throw new Error(data.error || "Load failed");
+async function apiPost(payload) {
+  const res = await fetch(SCRIPT_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || "Save failed");
+
   return data;
 }
 
 async function apiSetAssignment(pin, key, staffId, date, location, role, note) {
-  const data = await jsonp({
+  return apiPost({
     action: "setAssignment",
     pin,
     key,
@@ -189,28 +175,22 @@ async function apiSetAssignment(pin, key, staffId, date, location, role, note) {
     role,
     note
   });
-
-  if (!data.ok) throw new Error(data.error || "Save failed");
 }
 
 async function apiAddStaff(pin, staffData) {
-  const data = await jsonp({
+  return apiPost({
     action: "addStaff",
     pin,
     staff: staffData
   });
-
-  if (!data.ok) throw new Error(data.error || "Add staff failed");
 }
 
 async function apiRemoveStaff(pin, staffId) {
-  const data = await jsonp({
+  return apiPost({
     action: "removeStaff",
     pin,
     staffId
   });
-
-  if (!data.ok) throw new Error(data.error || "Remove staff failed");
 }
 
 // ─────────────────────────────────────────────
