@@ -2,6 +2,7 @@
 // PHEM Staff Assignments
 // Multiple assignments per person per day
 // Matches current index.html IDs
+// Dynamic row height fix so multiple chips do not overlap staff
 // ─────────────────────────────────────────────
 
 const DAY_SHORT = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
@@ -142,8 +143,7 @@ function getAssignmentsForStaffDay(staffId, isoDate) {
 
 function getMaxAssignmentsForStaffInWeek(staffId) {
   const days = getWeekDays();
-
-  let max = 1;
+  let max = 0;
 
   days.forEach(day => {
     const count = getAssignmentsForStaffDay(staffId, fmtISO(day)).length;
@@ -156,8 +156,22 @@ function getMaxAssignmentsForStaffInWeek(staffId) {
 function getRowHeightForStaff(staffId) {
   const maxAssignments = getMaxAssignmentsForStaffInWeek(staffId);
 
-  // Base row is 78px. Each extra assignment adds space.
-  return 78 + Math.max(0, maxAssignments - 1) * 58;
+  if (maxAssignments <= 0) {
+    return 78;
+  }
+
+  const chipHeight = 58;
+  const gap = 6;
+  const cellPadding = 22;
+  const addAnotherHeight = isEditMode ? 30 : 0;
+
+  return Math.max(
+    78,
+    (maxAssignments * chipHeight) +
+    ((maxAssignments - 1) * gap) +
+    cellPadding +
+    addAnotherHeight
+  );
 }
 
 // ─────────────────────────────────────────────
@@ -319,7 +333,6 @@ function render() {
 
 function renderStats() {
   const weekDays = getWeekDays();
-  const totalStaffDays = staff.length * 7;
 
   let assignmentCount = 0;
   let daysWithNoAssignment = 0;
@@ -365,7 +378,7 @@ function renderStaffList() {
     const rowHeight = getRowHeightForStaff(s.id);
 
     return `
-      <div class="staff-row ${isEditMode ? "clickable" : ""}" style="height:${rowHeight}px;min-height:${rowHeight}px">
+      <div class="staff-row ${isEditMode ? "clickable" : ""}" style="--row-height:${rowHeight}px">
         <div class="unit-bar" style="background:${u.color}"></div>
         <div style="flex:1;min-width:0">
           <div class="staff-name">${escapeHtml(s.name)}</div>
@@ -425,7 +438,7 @@ function renderGrid() {
             <td class="${isToday(day) ? "today-col" : ""} ${isEditMode ? "editable" : ""}"
                 data-staff-id="${escapeHtml(s.id)}"
                 data-date="${isoDate}"
-                style="height:${rowHeight}px;min-height:${rowHeight}px">
+                style="--row-height:${rowHeight}px">
               
               <div class="assignment-stack">
                 ${dayAssignments.map(asgn => `
