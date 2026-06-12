@@ -1,446 +1,61 @@
+// ─────────────────────────────────────────────
+// HE-CDER Staff Operations Board
+// Plain GitHub Pages frontend
+// ─────────────────────────────────────────────
+
 const DAY_SHORT = ["MON","TUE","WED","THU","FRI","SAT","SUN"];
 
 const UNITS = [
   { id: "epi",       label: "Epidemiology",        color: "#236092", bg: "#EAF6FA" },
-  { id: "biowatch",  label: "Biowatch",             color: "#FFA300", bg: "#FFF7E6" },
-  { id: "vaccines",  label: "Vaccines",             color: "#05C3DE", bg: "#E6F9FC" },
-  { id: "lab",       label: "Public Health Lab",    color: "#7B4FBF", bg: "#F3EEFF" },
-  { id: "warehouse", label: "Emergency Warehouse",  color: "#E03C31", bg: "#FFF0EF" },
-  { id: "narcan",    label: "Narcan Distribution",  color: "#008B8B", bg: "#E6F5F5" },
-  { id: "admin",     label: "Admin / Other",        color: "#6D7378", bg: "#F7FAFC" },
+  { id: "biowatch",  label: "Biowatch",            color: "#FFA300", bg: "#FFF7E6" },
+  { id: "vaccines",  label: "Vaccines",            color: "#05C3DE", bg: "#E6F9FC" },
+  { id: "lab",       label: "Public Health Lab",   color: "#7B4FBF", bg: "#F3EEFF" },
+  { id: "warehouse", label: "Emergency Warehouse", color: "#E03C31", bg: "#FFF0EF" },
+  { id: "narcan",    label: "Narcan Distribution", color: "#008B8B", bg: "#E6F5F5" },
+  { id: "admin",     label: "Admin / Other",       color: "#6D7378", bg: "#F7FAFC" }
 ];
 
 const LOCATIONS = [
-  "Long Beach HQ", "San Diego Office", "EOC", "Field – OC", "Field – Pasadena",
-  "Field – Riverside", "Emergency Warehouse", "Remote / WFH", "Leave / Off",
+  "Worsham Warehouse",
+  "Office",
+  "EOC",
+  "Field",
+  "San Diego",
+  "Pasadena",
+  "FIFA Event Site",
+  "Convention Center",
+  "Mobile Screen Deployment",
+  "Remote / WFH",
+  "Leave / Off"
 ];
 
 const ROLES = [
-  "Epidemiologist", "Biowatch Analyst", "Vaccine Coordinator", "Lab Tech",
-  "Logistics Lead", "Narcan Distributor", "Field Supervisor", "Admin Support",
-  "On-Call", "Training", "Leave", "Other",
+  "San Diego Route",
+  "FIFA Screen Deployment",
+  "Warehouse Receiving",
+  "Inventory / Sortly",
+  "BioWatch",
+  "Narcan Distribution",
+  "Pickup / Delivery",
+  "Fleet / Vehicle Support",
+  "Training",
+  "Meeting",
+  "Leave",
+  "Unavailable",
+  "Other"
 ];
 
-const state = {
-  staff: [],
-  assignments: {},
-  weekStart: getMondayOfWeek(new Date()),
-  isEditMode: false,
-  managerPin: null,
-  savingKeys: new Set(),
-  pinDigits: [],
-  modal: null,
-};
+let staff = [];
+let assignments = {};
+let weekStart = getMondayOfWeek(new Date());
+let isEditMode = false;
+let managerPin = "";
+let savingKeys = new Set();
+let activeModal = null;
 
-const els = {};
-
-document.addEventListener("DOMContentLoaded", () => {
-  cacheEls();
-  setupStaticUI();
-  bindEvents();
-  loadData();
-});
-
-function cacheEls() {
-  [
-    "statStaff", "statAssigned", "statOpen", "modeBadge", "managerLoginBtn", "lockBtn", "refreshBtn",
-    "prevWeekBtn", "nextWeekBtn", "todayBtn", "weekLabel", "legend", "statusBar",
-    "staffHeader", "staffList", "sidebarAdd", "addStaffToggle", "addStaffForm", "newStaffName",
-    "newStaffUnit", "addStaffBtn", "cancelAddStaffBtn", "loadingMessage", "gridTable", "gridHeader",
-    "gridBody", "pinOverlay", "pinDots", "pinError", "pinKeypad", "closePinBtn",
-    "assignmentOverlay", "modalStaffName", "modalDate", "modalLocation", "modalRole", "modalNote",
-    "closeAssignmentBtn", "clearAssignmentBtn", "cancelAssignmentBtn", "saveAssignmentBtn"
-  ].forEach(id => els[id] = document.getElementById(id));
-}
-
-function setupStaticUI() {
-  els.legend.innerHTML = UNITS.map(u => `
-    <span class="legend-item">
-      <span class="legend-dot" style="background:${u.color}"></span>
-      ${escapeHtml(u.label)}
-    </span>
-  `).join("");
-
-  fillSelect(els.newStaffUnit, UNITS.map(u => [u.id, u.label]));
-  fillSelect(els.modalLocation, [["", "— Select location —"], ...LOCATIONS.map(l => [l, l])]);
-  fillSelect(els.modalRole, [["", "— Select role —"], ...ROLES.map(r => [r, r])]);
-
-  renderPinDots();
-  renderPinKeypad();
-}
-
-function bindEvents() {
-  els.refreshBtn.addEventListener("click", loadData);
-  els.prevWeekBtn.addEventListener("click", () => { state.weekStart = addDays(state.weekStart, -7); render(); });
-  els.nextWeekBtn.addEventListener("click", () => { state.weekStart = addDays(state.weekStart, 7); render(); });
-  els.todayBtn.addEventListener("click", () => { state.weekStart = getMondayOfWeek(new Date()); render(); });
-
-  els.managerLoginBtn.addEventListener("click", openPinModal);
-  els.lockBtn.addEventListener("click", exitEditMode);
-  els.closePinBtn.addEventListener("click", closePinModal);
-  els.pinOverlay.addEventListener("click", e => { if (e.target === els.pinOverlay) closePinModal(); });
-
-  els.addStaffToggle.addEventListener("click", () => showAddStaffForm(true));
-  els.cancelAddStaffBtn.addEventListener("click", () => showAddStaffForm(false));
-  els.addStaffBtn.addEventListener("click", addStaff);
-  els.newStaffName.addEventListener("keydown", e => { if (e.key === "Enter") addStaff(); });
-
-  els.closeAssignmentBtn.addEventListener("click", closeAssignmentModal);
-  els.cancelAssignmentBtn.addEventListener("click", closeAssignmentModal);
-  els.assignmentOverlay.addEventListener("click", e => { if (e.target === els.assignmentOverlay) closeAssignmentModal(); });
-  els.saveAssignmentBtn.addEventListener("click", saveAssignment);
-  els.clearAssignmentBtn.addEventListener("click", clearAssignment);
-}
-
-// ── API via JSONP ─────────────────────────────────────────────
-function apiCall(params = {}) {
-  return new Promise((resolve, reject) => {
-    if (!SCRIPT_URL || SCRIPT_URL.includes("YOUR_APPS_SCRIPT")) {
-      reject(new Error("SCRIPT_URL is not set in config.js"));
-      return;
-    }
-
-    const callbackName = "hecder_cb_" + Math.random().toString(36).slice(2);
-    const script = document.createElement("script");
-    const url = new URL(SCRIPT_URL);
-
-    Object.entries(params).forEach(([key, value]) => {
-      url.searchParams.set(key, value == null ? "" : String(value));
-    });
-    url.searchParams.set("callback", callbackName);
-    url.searchParams.set("_", Date.now());
-
-    const timeout = setTimeout(() => {
-      cleanup();
-      reject(new Error("Request timed out"));
-    }, 20000);
-
-    window[callbackName] = data => {
-      cleanup();
-      if (!data || data.ok === false) reject(new Error(data?.error || "Request failed"));
-      else resolve(data);
-    };
-
-    script.onerror = () => {
-      cleanup();
-      reject(new Error("Network/script load failed"));
-    };
-
-    function cleanup() {
-      clearTimeout(timeout);
-      delete window[callbackName];
-      script.remove();
-    }
-
-    script.src = url.toString();
-    document.body.appendChild(script);
-  });
-}
-
-async function loadData() {
-  setStatus("loading", "⟳ Loading board data…");
-  try {
-    const data = await apiCall();
-    state.staff = data.staff || [];
-    state.assignments = data.assignments || {};
-    setStatus("ok", `Last loaded ${new Date().toLocaleTimeString()}`);
-    render();
-  } catch (e) {
-    setStatus("error", `⚠ Load error: ${e.message}`);
-    render();
-  }
-}
-
-// ── Render ───────────────────────────────────────────────────
-function render() {
-  const weekDays = getWeekDays();
-  const totalSlots = state.staff.length * 7;
-  const filledSlots = weekDays.reduce((acc, d) => {
-    return acc + state.staff.filter(s => state.assignments[assignKey(s.id, d)]).length;
-  }, 0);
-
-  els.statStaff.textContent = state.staff.length;
-  els.statAssigned.textContent = filledSlots;
-  els.statOpen.textContent = totalSlots - filledSlots;
-  els.staffHeader.textContent = `Staff (${state.staff.length})`;
-  els.weekLabel.textContent = `Week of ${fmtDate(state.weekStart)} – ${fmtDate(addDays(state.weekStart, 6))}`;
-
-  els.modeBadge.className = `mode-badge ${state.isEditMode ? "edit" : "view"}`;
-  els.modeBadge.textContent = state.isEditMode ? "✎ Edit Mode" : "👁 View Only";
-  els.managerLoginBtn.classList.toggle("hidden", state.isEditMode);
-  els.lockBtn.classList.toggle("hidden", !state.isEditMode);
-  els.sidebarAdd.classList.toggle("hidden", !state.isEditMode);
-
-  const existingHint = els.legend.querySelector(".edit-hint");
-  if (existingHint) existingHint.remove();
-  if (state.isEditMode) {
-    const hint = document.createElement("span");
-    hint.className = "edit-hint";
-    hint.textContent = "// click any cell to assign";
-    els.legend.appendChild(hint);
-  }
-
-  renderStaffList();
-  renderGrid(weekDays);
-}
-
-function renderStaffList() {
-  els.staffList.innerHTML = state.staff.map(s => {
-    const u = unitMeta(s.unit);
-    return `
-      <div class="staff-row ${state.isEditMode ? "clickable" : ""}">
-        <div class="unit-bar" style="background:${u.color}"></div>
-        <div style="flex:1;min-width:0">
-          <div class="staff-name">${escapeHtml(s.name)}</div>
-          <div class="staff-unit-tag">${escapeHtml(u.label)}</div>
-        </div>
-        ${state.isEditMode ? `<button class="staff-remove" data-id="${escapeAttr(s.id)}" data-name="${escapeAttr(s.name)}">×</button>` : ""}
-      </div>
-    `;
-  }).join("");
-
-  els.staffList.querySelectorAll(".staff-remove").forEach(btn => {
-    btn.addEventListener("click", () => removeStaff(btn.dataset.id, btn.dataset.name));
-  });
-}
-
-function renderGrid(weekDays) {
-  if (!state.staff.length) {
-    els.loadingMessage.classList.remove("hidden");
-    els.loadingMessage.textContent = "// No staff yet. Log in as manager and add staff.";
-    els.gridTable.classList.add("hidden");
-    return;
-  }
-
-  els.loadingMessage.classList.add("hidden");
-  els.gridTable.classList.remove("hidden");
-
-  els.gridHeader.innerHTML = weekDays.map((d, i) => `
-    <th class="${isToday(d) ? "today" : ""}">
-      ${DAY_SHORT[i]}
-      <span class="th-date">${fmtDate(d)}</span>
-    </th>
-  `).join("");
-
-  els.gridBody.innerHTML = state.staff.map(s => `
-    <tr>
-      ${weekDays.map((d, di) => renderCell(s, d, di)).join("")}
-    </tr>
-  `).join("");
-
-  els.gridBody.querySelectorAll("td[data-staff-id]").forEach(td => {
-    td.addEventListener("click", () => openAssignmentModal(td.dataset.staffId, td.dataset.date));
-  });
-}
-
-function renderCell(s, d) {
-  const key = assignKey(s.id, d);
-  const asgn = state.assignments[key];
-  const u = unitMeta(s.unit);
-  const saving = state.savingKeys.has(key);
-  const cls = [isToday(d) ? "today-col" : "", state.isEditMode ? "editable" : ""].join(" ");
-
-  if (asgn) {
-    return `
-      <td class="${cls}" data-staff-id="${escapeAttr(s.id)}" data-date="${fmtISO(d)}">
-        <div class="assignment-chip ${saving ? "saving" : ""}" style="background:${u.bg};border-left:3px solid ${u.color}">
-          <div class="chip-role" style="color:${u.color}">${escapeHtml(asgn.role || "—")}</div>
-          <div class="chip-location" style="color:${u.color}">${escapeHtml(asgn.location || "—")}</div>
-        </div>
-      </td>
-    `;
-  }
-
-  return `
-    <td class="${cls}" data-staff-id="${escapeAttr(s.id)}" data-date="${fmtISO(d)}">
-      <div class="empty-cell">${state.isEditMode ? `<span class="empty-cell-plus">+</span>` : ""}</div>
-    </td>
-  `;
-}
-
-// ── PIN / Edit Mode ──────────────────────────────────────────
-function openPinModal() {
-  state.pinDigits = [];
-  els.pinError.textContent = "";
-  renderPinDots();
-  els.pinOverlay.classList.remove("hidden");
-}
-
-function closePinModal() {
-  els.pinOverlay.classList.add("hidden");
-}
-
-function renderPinDots(error = false) {
-  els.pinDots.innerHTML = [0,1,2,3].map(i =>
-    `<div class="pin-dot ${state.pinDigits.length > i ? (error ? "error" : "filled") : ""}"></div>`
-  ).join("");
-}
-
-function renderPinKeypad() {
-  els.pinKeypad.innerHTML = [1,2,3,4,5,6,7,8,9].map(n =>
-    `<button class="pin-key" data-digit="${n}">${n}</button>`
-  ).join("") + `<div></div><button class="pin-key" data-digit="0">0</button><button class="pin-key" id="pinBackspace" style="font-size:14px">⌫</button>`;
-
-  els.pinKeypad.querySelectorAll("button[data-digit]").forEach(btn => {
-    btn.addEventListener("click", () => pressPin(btn.dataset.digit));
-  });
-  document.getElementById("pinBackspace").addEventListener("click", () => {
-    state.pinDigits = state.pinDigits.slice(0, -1);
-    renderPinDots();
-  });
-}
-
-function pressPin(digit) {
-  if (state.pinDigits.length >= 4) return;
-  state.pinDigits.push(digit);
-  els.pinError.textContent = "";
-  renderPinDots();
-
-  if (state.pinDigits.length === 4) {
-    state.managerPin = state.pinDigits.join("");
-    state.isEditMode = true;
-    closePinModal();
-    render();
-  }
-}
-
-function exitEditMode() {
-  state.isEditMode = false;
-  state.managerPin = null;
-  showAddStaffForm(false);
-  render();
-}
-
-// ── Assignment Modal ─────────────────────────────────────────
-function openAssignmentModal(staffId, isoDate) {
-  if (!state.isEditMode) return;
-  const staff = state.staff.find(s => s.id === staffId);
-  if (!staff) return;
-
-  const day = parseISODate(isoDate);
-  const key = assignKey(staffId, day);
-  const existing = state.assignments[key];
-
-  state.modal = { staffId, staffName: staff.name, date: isoDate, key };
-  els.modalStaffName.textContent = staff.name;
-  els.modalDate.textContent = `${DAY_SHORT[getWeekDays().findIndex(d => fmtISO(d) === isoDate)]} · ${fmtDate(day)}`;
-  els.modalLocation.value = existing?.location || "";
-  els.modalRole.value = existing?.role || "";
-  els.modalNote.value = existing?.note || "";
-  els.clearAssignmentBtn.classList.toggle("hidden", !existing);
-  els.assignmentOverlay.classList.remove("hidden");
-}
-
-function closeAssignmentModal() {
-  state.modal = null;
-  els.assignmentOverlay.classList.add("hidden");
-}
-
-async function saveAssignment() {
-  if (!state.modal) return;
-  const { staffId, date, key } = state.modal;
-  const location = els.modalLocation.value;
-  const role = els.modalRole.value;
-  const note = els.modalNote.value;
-
-  closeAssignmentModal();
-  optimisticAssignment(key, staffId, date, location, role, note);
-  setStatus("saving", "● Saving…");
-
-  try {
-    await apiCall({ action: "setAssignment", pin: state.managerPin, key, staffId, date, location, role, note });
-    setStatus("saved", `✓ Saved · ${new Date().toLocaleTimeString()}`);
-    await loadData();
-  } catch (e) {
-    setStatus("error", `⚠ Save failed: ${e.message}`);
-    if (e.message === "Invalid PIN") exitEditMode();
-    await loadData();
-  } finally {
-    state.savingKeys.delete(key);
-    render();
-  }
-}
-
-async function clearAssignment() {
-  if (!state.modal) return;
-  const { staffId, date, key } = state.modal;
-
-  closeAssignmentModal();
-  optimisticAssignment(key, staffId, date, "", "", "");
-  setStatus("saving", "● Clearing…");
-
-  try {
-    await apiCall({ action: "setAssignment", pin: state.managerPin, key, staffId, date, location: "", role: "", note: "" });
-    setStatus("saved", `✓ Cleared · ${new Date().toLocaleTimeString()}`);
-    await loadData();
-  } catch (e) {
-    setStatus("error", `⚠ Clear failed: ${e.message}`);
-    await loadData();
-  } finally {
-    state.savingKeys.delete(key);
-    render();
-  }
-}
-
-function optimisticAssignment(key, staffId, date, location, role, note) {
-  state.savingKeys.add(key);
-  if (!location && !role) delete state.assignments[key];
-  else state.assignments[key] = { staffId, date, location, role, note };
-  render();
-}
-
-// ── Staff ────────────────────────────────────────────────────
-function showAddStaffForm(show) {
-  els.addStaffForm.classList.toggle("hidden", !show);
-  els.addStaffToggle.classList.toggle("hidden", show);
-  if (show) els.newStaffName.focus();
-}
-
-async function addStaff() {
-  const name = els.newStaffName.value.trim();
-  const unit = els.newStaffUnit.value;
-  if (!name) return;
-
-  const staff = { id: makeId(), name, unit, active: true };
-  state.staff.push(staff);
-  els.newStaffName.value = "";
-  els.newStaffUnit.value = "epi";
-  showAddStaffForm(false);
-  render();
-  setStatus("saving", "● Adding staff…");
-
-  try {
-    await apiCall({ action: "addStaff", pin: state.managerPin, id: staff.id, name: staff.name, unit: staff.unit });
-    setStatus("saved", `✓ ${staff.name} added`);
-    await loadData();
-  } catch (e) {
-    setStatus("error", `⚠ Add failed: ${e.message}`);
-    await loadData();
-  }
-}
-
-async function removeStaff(id, name) {
-  if (!window.confirm(`Remove ${name} from the board?`)) return;
-
-  state.staff = state.staff.filter(s => s.id !== id);
-  render();
-  setStatus("saving", `● Removing ${name}…`);
-
-  try {
-    await apiCall({ action: "removeStaff", pin: state.managerPin, staffId: id });
-    setStatus("saved", `✓ ${name} removed`);
-    await loadData();
-  } catch (e) {
-    setStatus("error", `⚠ Remove failed: ${e.message}`);
-    await loadData();
-  }
-}
-
-// ── Helpers ──────────────────────────────────────────────────
-function setStatus(type, msg) {
-  els.statusBar.className = `status-bar ${type}`;
-  els.statusBar.textContent = msg;
-}
+// ─────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────
 
 function unitMeta(id) {
   return UNITS.find(u => u.id === id) || UNITS[6];
@@ -464,21 +79,12 @@ function addDays(date, n) {
   return d;
 }
 
-function getWeekDays() {
-  return Array.from({ length: 7 }, (_, i) => addDays(state.weekStart, i));
-}
-
 function fmtDate(d) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 function fmtISO(d) {
-  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
-}
-
-function parseISODate(str) {
-  const [y, m, d] = str.split("-").map(Number);
-  return new Date(y, m - 1, d);
+  return d.toISOString().slice(0, 10);
 }
 
 function isToday(d) {
@@ -486,16 +92,11 @@ function isToday(d) {
 }
 
 function assignKey(staffId, date) {
-  const dateStr = date instanceof Date ? fmtISO(date) : date;
-  return `${staffId}__${dateStr}`;
-}
-
-function fillSelect(select, options) {
-  select.innerHTML = options.map(([value, label]) => `<option value="${escapeAttr(value)}">${escapeHtml(label)}</option>`).join("");
+  return `${staffId}__${fmtISO(date)}`;
 }
 
 function escapeHtml(value) {
-  return String(value ?? "")
+  return String(value || "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
@@ -503,6 +104,588 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
-function escapeAttr(value) {
-  return escapeHtml(value);
+function setStatus(type, msg) {
+  const el = document.getElementById("statusBar");
+  if (!el) return;
+
+  el.className = `status-bar ${type}`;
+
+  let icon = "";
+  if (type === "loading") icon = "⟳ ";
+  if (type === "saving") icon = "● ";
+  if (type === "saved") icon = "✓ ";
+  if (type === "error") icon = "⚠ ";
+
+  el.textContent = icon + msg;
 }
+
+function getWeekDays() {
+  return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+}
+
+// ─────────────────────────────────────────────
+// JSONP API
+// ─────────────────────────────────────────────
+
+function jsonp(params = {}) {
+  return new Promise((resolve, reject) => {
+    if (!SCRIPT_URL || SCRIPT_URL.includes("YOUR_APPS_SCRIPT_WEB_APP_URL_HERE")) {
+      reject(new Error("Missing Apps Script URL in config.js"));
+      return;
+    }
+
+    const callbackName = "jsonp_cb_" + Math.random().toString(36).slice(2);
+    const url = new URL(SCRIPT_URL);
+
+    Object.entries(params).forEach(([key, value]) => {
+      url.searchParams.set(key, typeof value === "object" ? JSON.stringify(value) : value);
+    });
+
+    url.searchParams.set("callback", callbackName);
+
+    const script = document.createElement("script");
+
+    window[callbackName] = function(data) {
+      cleanup();
+      resolve(data);
+    };
+
+    script.onerror = function() {
+      cleanup();
+      reject(new Error("Could not reach Apps Script."));
+    };
+
+    function cleanup() {
+      delete window[callbackName];
+      script.remove();
+    }
+
+    script.src = url.toString();
+    document.body.appendChild(script);
+  });
+}
+
+async function apiLoad() {
+  const data = await jsonp({ action: "load" });
+  if (!data.ok) throw new Error(data.error || "Load failed");
+  return data;
+}
+
+async function apiSetAssignment(pin, key, staffId, date, location, role, note) {
+  const data = await jsonp({
+    action: "setAssignment",
+    pin,
+    key,
+    staffId,
+    date,
+    location,
+    role,
+    note
+  });
+
+  if (!data.ok) throw new Error(data.error || "Save failed");
+}
+
+async function apiAddStaff(pin, staffData) {
+  const data = await jsonp({
+    action: "addStaff",
+    pin,
+    staff: staffData
+  });
+
+  if (!data.ok) throw new Error(data.error || "Add staff failed");
+}
+
+async function apiRemoveStaff(pin, staffId) {
+  const data = await jsonp({
+    action: "removeStaff",
+    pin,
+    staffId
+  });
+
+  if (!data.ok) throw new Error(data.error || "Remove staff failed");
+}
+
+// ─────────────────────────────────────────────
+// Boot
+// ─────────────────────────────────────────────
+
+document.addEventListener("DOMContentLoaded", () => {
+  bindEvents();
+  renderLegend();
+  loadData();
+});
+
+function bindEvents() {
+  document.getElementById("prevWeekBtn")?.addEventListener("click", () => {
+    weekStart = addDays(weekStart, -7);
+    render();
+  });
+
+  document.getElementById("nextWeekBtn")?.addEventListener("click", () => {
+    weekStart = addDays(weekStart, 7);
+    render();
+  });
+
+  document.getElementById("todayBtn")?.addEventListener("click", () => {
+    weekStart = getMondayOfWeek(new Date());
+    render();
+  });
+
+  document.getElementById("refreshBtn")?.addEventListener("click", loadData);
+
+  document.getElementById("managerLoginBtn")?.addEventListener("click", openPinModal);
+  document.getElementById("lockBtn")?.addEventListener("click", exitEditMode);
+
+  document.getElementById("addStaffBtn")?.addEventListener("click", showAddStaffForm);
+  document.getElementById("cancelAddStaffBtn")?.addEventListener("click", hideAddStaffForm);
+  document.getElementById("saveAddStaffBtn")?.addEventListener("click", handleAddStaff);
+
+  document.getElementById("modalCancelBtn")?.addEventListener("click", closeAssignmentModal);
+  document.getElementById("modalSaveBtn")?.addEventListener("click", saveAssignmentModal);
+  document.getElementById("modalClearBtn")?.addEventListener("click", clearAssignmentCell);
+
+  document.getElementById("pinCancelBtn")?.addEventListener("click", closePinModal);
+}
+
+// ─────────────────────────────────────────────
+// Data
+// ─────────────────────────────────────────────
+
+async function loadData() {
+  setStatus("loading", "Loading board data…");
+
+  try {
+    const data = await apiLoad();
+    staff = data.staff || [];
+    assignments = data.assignments || {};
+    setStatus("ok", `Last loaded ${new Date().toLocaleTimeString()}`);
+    render();
+  } catch (err) {
+    setStatus("error", `Load error: ${err.message}`);
+  }
+}
+
+// ─────────────────────────────────────────────
+// Render
+// ─────────────────────────────────────────────
+
+function render() {
+  renderHeaderStats();
+  renderWeekNav();
+  renderStaffList();
+  renderGrid();
+  renderEditState();
+}
+
+function renderHeaderStats() {
+  const weekDays = getWeekDays();
+  const totalSlots = staff.length * 7;
+
+  let filledSlots = 0;
+  weekDays.forEach(day => {
+    staff.forEach(s => {
+      if (assignments[assignKey(s.id, day)]) filledSlots++;
+    });
+  });
+
+  document.getElementById("staffCount").textContent = staff.length;
+  document.getElementById("assignedCount").textContent = filledSlots;
+  document.getElementById("openCount").textContent = totalSlots - filledSlots;
+}
+
+function renderWeekNav() {
+  const weekDays = getWeekDays();
+  document.getElementById("weekLabel").textContent =
+    `Week of ${fmtDate(weekDays[0])} – ${fmtDate(weekDays[6])}`;
+}
+
+function renderLegend() {
+  const legend = document.getElementById("legend");
+  if (!legend) return;
+
+  legend.innerHTML = UNITS.map(u => `
+    <span class="legend-item">
+      <span class="legend-dot" style="background:${u.color}"></span>
+      ${escapeHtml(u.label)}
+    </span>
+  `).join("") + `
+    <span id="editHint" class="edit-hint hidden">// click any cell to assign</span>
+  `;
+}
+
+function renderStaffList() {
+  const staffList = document.getElementById("staffList");
+  if (!staffList) return;
+
+  staffList.innerHTML = staff.map(s => {
+    const u = unitMeta(s.unit);
+
+    return `
+      <div class="staff-row ${isEditMode ? "clickable" : ""}">
+        <div class="unit-bar" style="background:${u.color}"></div>
+        <div style="flex:1;min-width:0">
+          <div class="staff-name">${escapeHtml(s.name)}</div>
+          <div class="staff-unit-tag">${escapeHtml(u.label)}</div>
+        </div>
+        ${isEditMode ? `<button class="staff-remove" onclick="handleRemoveStaff('${escapeHtml(s.id)}','${escapeHtml(s.name)}')">×</button>` : ""}
+      </div>
+    `;
+  }).join("");
+
+  document.getElementById("staffListCount").textContent = staff.length;
+}
+
+function renderGrid() {
+  const gridArea = document.getElementById("gridArea");
+  if (!gridArea) return;
+
+  const weekDays = getWeekDays();
+
+  if (!staff.length) {
+    gridArea.innerHTML = `
+      <div class="loading-message">
+        // No staff loaded yet. Use Manager Login → Add Staff.
+      </div>
+    `;
+    return;
+  }
+
+  const header = `
+    <thead>
+      <tr>
+        ${weekDays.map((d, i) => `
+          <th class="${isToday(d) ? "today" : ""}">
+            ${DAY_SHORT[i]}
+            <span class="th-date">${fmtDate(d)}</span>
+          </th>
+        `).join("")}
+      </tr>
+    </thead>
+  `;
+
+  const body = `
+    <tbody>
+      ${staff.map(s => `
+        <tr>
+          ${weekDays.map((d, i) => {
+            const key = assignKey(s.id, d);
+            const asgn = assignments[key];
+            const u = unitMeta(s.unit);
+            const saving = savingKeys.has(key);
+
+            if (asgn) {
+              return `
+                <td class="${isToday(d) ? "today-col" : ""} ${isEditMode ? "editable" : ""}"
+                    onclick="openAssignmentModal('${escapeHtml(s.id)}','${fmtISO(d)}')">
+                  <div class="assignment-chip ${saving ? "saving" : ""}"
+                       style="background:${u.bg};border-left:3px solid ${u.color}">
+                    <div class="chip-role" style="color:${u.color}">${escapeHtml(asgn.role || "—")}</div>
+                    <div class="chip-location" style="color:${u.color}">${escapeHtml(asgn.location || "—")}</div>
+                    <div class="chip-note" style="color:${u.color}">${escapeHtml(asgn.note || "")}</div>
+                  </div>
+                </td>
+              `;
+            }
+
+            return `
+              <td class="${isToday(d) ? "today-col" : ""} ${isEditMode ? "editable" : ""}"
+                  onclick="openAssignmentModal('${escapeHtml(s.id)}','${fmtISO(d)}')">
+                <div class="empty-cell">
+                  ${isEditMode ? `<span class="empty-cell-plus">+</span>` : ""}
+                </div>
+              </td>
+            `;
+          }).join("")}
+        </tr>
+      `).join("")}
+    </tbody>
+  `;
+
+  gridArea.innerHTML = `
+    <table class="grid-table">
+      ${header}
+      ${body}
+    </table>
+  `;
+}
+
+function renderEditState() {
+  const modeBadge = document.getElementById("modeBadge");
+  const managerLoginBtn = document.getElementById("managerLoginBtn");
+  const lockBtn = document.getElementById("lockBtn");
+  const sidebarAdd = document.getElementById("sidebarAdd");
+  const editHint = document.getElementById("editHint");
+
+  if (isEditMode) {
+    modeBadge.textContent = "✎ Edit Mode";
+    modeBadge.className = "mode-badge edit";
+    managerLoginBtn.classList.add("hidden");
+    lockBtn.classList.remove("hidden");
+    sidebarAdd.classList.remove("hidden");
+    editHint?.classList.remove("hidden");
+  } else {
+    modeBadge.textContent = "👁 View Only";
+    modeBadge.className = "mode-badge view";
+    managerLoginBtn.classList.remove("hidden");
+    lockBtn.classList.add("hidden");
+    sidebarAdd.classList.add("hidden");
+    editHint?.classList.add("hidden");
+  }
+}
+
+// ─────────────────────────────────────────────
+// PIN
+// ─────────────────────────────────────────────
+
+function openPinModal() {
+  document.getElementById("pinModal").classList.remove("hidden");
+  resetPin();
+}
+
+function closePinModal() {
+  document.getElementById("pinModal").classList.add("hidden");
+  resetPin();
+}
+
+function resetPin() {
+  const input = document.getElementById("pinHiddenInput");
+  if (input) input.value = "";
+
+  document.querySelectorAll(".pin-dot").forEach(dot => {
+    dot.classList.remove("filled", "error");
+  });
+
+  const msg = document.getElementById("pinErrorMsg");
+  if (msg) msg.textContent = "";
+}
+
+function pinPress(num) {
+  const input = document.getElementById("pinHiddenInput");
+  if (!input || input.value.length >= 4) return;
+
+  input.value += String(num);
+  updatePinDots(input.value);
+
+  if (input.value.length === 4) {
+    setTimeout(() => {
+      managerPin = input.value;
+      isEditMode = true;
+      closePinModal();
+      render();
+    }, 120);
+  }
+}
+
+function pinDelete() {
+  const input = document.getElementById("pinHiddenInput");
+  if (!input) return;
+
+  input.value = input.value.slice(0, -1);
+  updatePinDots(input.value);
+}
+
+function updatePinDots(value) {
+  document.querySelectorAll(".pin-dot").forEach((dot, i) => {
+    dot.classList.toggle("filled", value.length > i);
+  });
+}
+
+function exitEditMode() {
+  isEditMode = false;
+  managerPin = "";
+  render();
+}
+
+// ─────────────────────────────────────────────
+// Staff
+// ─────────────────────────────────────────────
+
+function showAddStaffForm() {
+  document.getElementById("addStaffForm").classList.remove("hidden");
+  document.getElementById("addStaffBtn").classList.add("hidden");
+  document.getElementById("newStaffName").focus();
+}
+
+function hideAddStaffForm() {
+  document.getElementById("addStaffForm").classList.add("hidden");
+  document.getElementById("addStaffBtn").classList.remove("hidden");
+  document.getElementById("newStaffName").value = "";
+  document.getElementById("newStaffUnit").value = "warehouse";
+}
+
+async function handleAddStaff() {
+  const name = document.getElementById("newStaffName").value.trim();
+  const unit = document.getElementById("newStaffUnit").value;
+
+  if (!name) return;
+
+  const s = {
+    id: makeId(),
+    name,
+    unit,
+    active: true
+  };
+
+  staff.push(s);
+  hideAddStaffForm();
+  render();
+
+  setStatus("saving", "Adding staff…");
+
+  try {
+    await apiAddStaff(managerPin, s);
+    setStatus("saved", `${name} added`);
+    loadData();
+  } catch (err) {
+    setStatus("error", `Add failed: ${err.message}`);
+    loadData();
+  }
+}
+
+async function handleRemoveStaff(id, name) {
+  if (!confirm(`Remove ${name} from the board?`)) return;
+
+  staff = staff.filter(s => s.id !== id);
+  render();
+
+  setStatus("saving", `Removing ${name}…`);
+
+  try {
+    await apiRemoveStaff(managerPin, id);
+    setStatus("saved", `${name} removed`);
+    loadData();
+  } catch (err) {
+    setStatus("error", `Remove failed: ${err.message}`);
+    loadData();
+  }
+}
+
+// ─────────────────────────────────────────────
+// Assignments
+// ─────────────────────────────────────────────
+
+function openAssignmentModal(staffId, isoDate) {
+  if (!isEditMode) return;
+
+  const s = staff.find(x => x.id === staffId);
+  if (!s) return;
+
+  const day = new Date(isoDate + "T00:00:00");
+  const key = `${staffId}__${isoDate}`;
+  const existing = assignments[key];
+
+  activeModal = {
+    staffId,
+    staffName: s.name,
+    day,
+    key
+  };
+
+  document.getElementById("modalTitle").textContent = s.name;
+  document.getElementById("modalSub").textContent = `${fmtDate(day)} · ${isoDate}`;
+
+  populateModalDropdowns();
+
+  document.getElementById("modalLocation").value = existing?.location || "";
+  document.getElementById("modalRole").value = existing?.role || "";
+  document.getElementById("modalNote").value = existing?.note || "";
+
+  document.getElementById("modalClearBtn").classList.toggle("hidden", !existing);
+  document.getElementById("assignmentModal").classList.remove("hidden");
+}
+
+function populateModalDropdowns() {
+  const loc = document.getElementById("modalLocation");
+  const role = document.getElementById("modalRole");
+  const unit = document.getElementById("newStaffUnit");
+
+  if (loc) {
+    loc.innerHTML = `<option value="">— Select location —</option>` +
+      LOCATIONS.map(l => `<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`).join("");
+  }
+
+  if (role) {
+    role.innerHTML = `<option value="">— Select role/task —</option>` +
+      ROLES.map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join("");
+  }
+
+  if (unit) {
+    unit.innerHTML = UNITS.map(u => `<option value="${u.id}">${escapeHtml(u.label)}</option>`).join("");
+  }
+}
+
+function closeAssignmentModal() {
+  document.getElementById("assignmentModal").classList.add("hidden");
+  activeModal = null;
+}
+
+async function saveAssignmentModal() {
+  if (!activeModal) return;
+
+  const location = document.getElementById("modalLocation").value;
+  const role = document.getElementById("modalRole").value;
+  const note = document.getElementById("modalNote").value;
+
+  const { staffId, day, key } = activeModal;
+
+  closeAssignmentModal();
+
+  if (!location && !role) {
+    delete assignments[key];
+  } else {
+    assignments[key] = {
+      staffId,
+      date: fmtISO(day),
+      location,
+      role,
+      note
+    };
+  }
+
+  savingKeys.add(key);
+  render();
+  setStatus("saving", "Saving…");
+
+  try {
+    await apiSetAssignment(managerPin, key, staffId, fmtISO(day), location, role, note);
+    savingKeys.delete(key);
+    setStatus("saved", `Saved · ${new Date().toLocaleTimeString()}`);
+    loadData();
+  } catch (err) {
+    savingKeys.delete(key);
+    setStatus("error", `Save failed: ${err.message}`);
+    if (err.message === "Invalid PIN") exitEditMode();
+    loadData();
+  }
+}
+
+async function clearAssignmentCell() {
+  if (!activeModal) return;
+
+  const { staffId, day, key } = activeModal;
+  closeAssignmentModal();
+
+  delete assignments[key];
+  savingKeys.add(key);
+  render();
+
+  setStatus("saving", "Clearing…");
+
+  try {
+    await apiSetAssignment(managerPin, key, staffId, fmtISO(day), "", "", "");
+    savingKeys.delete(key);
+    setStatus("saved", `Cleared · ${new Date().toLocaleTimeString()}`);
+    loadData();
+  } catch (err) {
+    savingKeys.delete(key);
+    setStatus("error", `Clear failed: ${err.message}`);
+    loadData();
+  }
+}
+
+// Expose functions needed by inline onclick handlers
+window.pinPress = pinPress;
+window.pinDelete = pinDelete;
+window.handleRemoveStaff = handleRemoveStaff;
+window.openAssignmentModal = openAssignmentModal;
