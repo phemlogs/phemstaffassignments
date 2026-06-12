@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>PHEM Staff Assignments - TV View</title>
+
+  <link rel="stylesheet" href="tv.css?v=1" />
+</head>
+
+<body>
+  <div class="tv-app">
+    <header class="tv-header">
+      <div class="tv-title-block">
+        <div class="tv-title">PHEM Staff Assignments</div>
+        <div class="tv-subtitle">Warehouse TV Dashboard</div>
+      </div>
+
+      <div class="tv-week-block">
+        <div id="weekLabel" class="tv-week-label">Loading week…</div>
+        <div id="refreshLabel" class="tv-refresh-label">Loading data…</div>
+      </div>
+
+      <div class="tv-stats">
+        <div class="tv-stat">
+          <span id="statStaff">0</span>
+          <small>Staff</small>
+        </div>
+        <div class="tv-stat">
+          <span id="statAssigned">0</span>
+          <small>Assignments</small>
+        </div>
+        <div class="tv-stat">
+          <span id="statOpen">0</span>
+          <small>Open Days</small>
+        </div>
+      </div>
+    </header>
+
+    <main class="tv-board-wrap">
+      <table class="tv-board">
+        <thead>
+          <tr>
+            <th class="staff-col">Staff</th>
+            <th id="day0">MON</th>
+            <th id="day1">TUE</th>
+            <th id="day2">WED</th>
+            <th id="day3">THU</th>
+            <th id="day4">FRI</th>
+            <th id="day5">SAT</th>
+            <th id="day6">SUN</th>
+          </tr>
+        </thead>
+
+        <tbody id="boardBody">
+          <tr>
+            <td colspan="8" class="loading-cell">Loading TV board…</td>
+          </tr>
+        </tbody>
+      </table>
+    </main>
+
+    <footer class="tv-footer">
+      <div id="legend" class="tv-legend"></div>
+      <div class="tv-footer-note">Read-only TV view · Auto-refresh every 10 minutes</div>
+    </footer>
+  </div>
+
+  <script src="config.js?v=1"></script>
+  <script src="tv.js?v=1"></script>
+</body>
+</html>
