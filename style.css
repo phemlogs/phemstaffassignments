@@ -42,7 +42,7 @@ body {
   min-height: 100vh;
 }
 
-/* ── Header ── */
+/* Header */
 .header {
   background: rgba(255,255,255,0.94);
   backdrop-filter: blur(12px);
@@ -161,7 +161,7 @@ body {
   border: 1px solid rgba(255,163,0,0.4);
 }
 
-/* ── Buttons ── */
+/* Buttons */
 .btn {
   padding: 7px 16px;
   border-radius: 3px;
@@ -220,7 +220,7 @@ body {
   transform: none !important;
 }
 
-/* ── Week nav ── */
+/* Week nav */
 .week-nav {
   display: flex;
   align-items: center;
@@ -239,7 +239,7 @@ body {
   text-align: center;
 }
 
-/* ── Legend ── */
+/* Legend */
 .legend {
   display: flex;
   gap: 10px;
@@ -271,7 +271,7 @@ body {
   color: var(--orange);
 }
 
-/* ── Status bar ── */
+/* Status bar */
 .status-bar {
   padding: 4px 24px;
   font-family: 'DM Mono', monospace;
@@ -307,7 +307,7 @@ body {
   color: var(--grey);
 }
 
-/* ── Main layout ── */
+/* Main layout */
 .main {
   display: flex;
   flex: 1;
@@ -315,7 +315,7 @@ body {
   min-height: 0;
 }
 
-/* ── Sidebar ── */
+/* Sidebar */
 .sidebar {
   width: 235px;
   flex-shrink: 0;
@@ -350,8 +350,8 @@ body {
   align-items: center;
   gap: 8px;
   padding: 0 14px;
-  height: 65px;
-  min-height: 65px;
+  height: 70px;
+  min-height: 70px;
   border-bottom: 1px solid var(--border);
   transition: background 0.1s;
 }
@@ -417,7 +417,7 @@ body {
   margin-top: 8px;
 }
 
-/* ── Grid ── */
+/* Grid */
 .grid-area {
   flex: 1;
   overflow: auto;
@@ -474,8 +474,8 @@ body {
   border-right: 1px solid var(--border);
   padding: 6px 8px;
   vertical-align: middle;
-  height: 65px;
-  min-height: 65px;
+  height: 70px;
+  min-height: 70px;
   min-width: 140px;
 }
 
@@ -495,15 +495,16 @@ body {
   background: rgba(5,195,222,0.09);
 }
 
-/* ── Assignment chip ── */
+/* Assignment chip */
 .assignment-chip {
   border-radius: 3px;
   padding: 4px 8px;
-  height: 46px;
+  min-height: 56px;
+  height: 56px;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
+  gap: 1px;
   overflow: hidden;
   transition: opacity 0.15s;
 }
@@ -538,8 +539,18 @@ body {
   font-size: 8px;
 }
 
+.chip-note {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  opacity: 0.95;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
 .empty-cell {
-  height: 46px;
+  height: 56px;
   border-radius: 3px;
   border: 1.5px dashed var(--border);
   display: flex;
@@ -560,7 +571,7 @@ td.editable:hover .empty-cell {
   line-height: 1;
 }
 
-/* ── Modal ── */
+/* Modal */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -659,7 +670,7 @@ td.editable:hover .empty-cell {
   color: var(--grey);
 }
 
-/* ── PIN Modal ── */
+/* PIN Modal */
 .pin-dots {
   display: flex;
   gap: 10px;
@@ -721,7 +732,7 @@ td.editable:hover .empty-cell {
   min-height: 16px;
 }
 
-/* ── Scrollbars ── */
+/* Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -740,7 +751,7 @@ td.editable:hover .empty-cell {
   background: var(--gold-light);
 }
 
-/* ── Mobile ── */
+/* Mobile */
 @media (max-width: 760px) {
   .header {
     padding: 12px;
@@ -787,8 +798,8 @@ td.editable:hover .empty-cell {
 
   .staff-row {
     padding: 0 8px;
-    height: 65px;
-    min-height: 65px;
+    height: 70px;
+    min-height: 70px;
   }
 
   .staff-name {
