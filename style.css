@@ -815,3 +815,52 @@ td.editable:hover .empty-cell {
     min-width: 125px;
   }
 }
+/* FORCE SHIFT TIME TO SHOW ON ASSIGNMENT CHIPS */
+.staff-row {
+  height: 78px !important;
+  min-height: 78px !important;
+}
+
+.grid-table td {
+  height: 78px !important;
+  min-height: 78px !important;
+  vertical-align: middle !important;
+}
+
+.assignment-chip {
+  height: 64px !important;
+  min-height: 64px !important;
+  padding: 5px 8px !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+}
+
+.chip-role {
+  font-size: 11px !important;
+  line-height: 1.15 !important;
+}
+
+.chip-location {
+  font-size: 9px !important;
+  line-height: 1.15 !important;
+}
+
+.chip-note {
+  display: block !important;
+  font-family: 'DM Mono', monospace !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  opacity: 1 !important;
+  line-height: 1.2 !important;
+  margin-top: 2px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.empty-cell {
+  height: 64px !important;
+  min-height: 64px !important;
+}
