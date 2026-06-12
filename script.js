@@ -4,6 +4,7 @@
 // Manager PIN can edit all rows
 // Staff PIN can edit only that staff person's row
 // Preserves current custom UNITS / LOCATIONS / ROLES
+// Fixed row height alignment
 // ─────────────────────────────────────────────
 
 const DAY_SHORT = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
@@ -170,8 +171,15 @@ function getMaxAssignmentsForStaffInWeek(staffId) {
 function getRowHeightForStaff(staffId) {
   const maxAssignments = getMaxAssignmentsForStaffInWeek(staffId);
 
+  /*
+    Base row must be taller than the empty grid cell.
+    Empty cell is 56px + 16px td padding + borders.
+    88px keeps left staff rows and right table rows aligned.
+  */
+  const baseRowHeight = 88;
+
   if (maxAssignments <= 0) {
-    return 78;
+    return baseRowHeight;
   }
 
   const chipHeight = 58;
@@ -180,7 +188,7 @@ function getRowHeightForStaff(staffId) {
   const addAnotherHeight = canEditStaff(staffId) ? 30 : 0;
 
   return Math.max(
-    78,
+    baseRowHeight,
     (maxAssignments * chipHeight) +
     ((maxAssignments - 1) * gap) +
     cellPadding +
