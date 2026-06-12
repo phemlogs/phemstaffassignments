@@ -1,9 +1,10 @@
 // ─────────────────────────────────────────────
-// HE-CDER Staff Operations Board
+// PHEM Staff Assignments
 // Plain GitHub Pages frontend
+// Matches current index.html IDs
 // ─────────────────────────────────────────────
 
-const DAY_SHORT = ["MON","TUE","WED","THU","FRI","SAT","SUN"];
+const DAY_SHORT = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 
 const UNITS = [
   { id: "epi",       label: "Epidemiology",        color: "#236092", bg: "#EAF6FA" },
@@ -51,7 +52,9 @@ let weekStart = getMondayOfWeek(new Date());
 let isEditMode = false;
 let managerPin = "";
 let savingKeys = new Set();
-let activeModal = null;
+let activeAssignment = null;
+
+let pinDigits = "";
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -69,7 +72,7 @@ function getMondayOfWeek(date) {
   const d = new Date(date);
   const day = d.getDay();
   d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
-  d.setHours(0,0,0,0);
+  d.setHours(0, 0, 0, 0);
   return d;
 }
 
@@ -104,11 +107,15 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
-function setStatus(type, msg) {
-  const el = document.getElementById("statusBar");
-  if (!el) return;
+function getWeekDays() {
+  return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+}
 
-  el.className = `status-bar ${type}`;
+function setStatus(type, msg) {
+  const bar = document.getElementById("statusBar");
+  if (!bar) return;
+
+  bar.className = `status-bar ${type}`;
 
   let icon = "";
   if (type === "loading") icon = "⟳ ";
@@ -116,11 +123,7 @@ function setStatus(type, msg) {
   if (type === "saved") icon = "✓ ";
   if (type === "error") icon = "⚠ ";
 
-  el.textContent = icon + msg;
-}
-
-function getWeekDays() {
-  return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  bar.textContent = icon + msg;
 }
 
 // ─────────────────────────────────────────────
@@ -138,7 +141,11 @@ function jsonp(params = {}) {
     const url = new URL(SCRIPT_URL);
 
     Object.entries(params).forEach(([key, value]) => {
-      url.searchParams.set(key, typeof value === "object" ? JSON.stringify(value) : value);
+      if (typeof value === "object") {
+        url.searchParams.set(key, JSON.stringify(value));
+      } else {
+        url.searchParams.set(key, value);
+      }
     });
 
     url.searchParams.set("callback", callbackName);
@@ -152,7 +159,7 @@ function jsonp(params = {}) {
 
     script.onerror = function() {
       cleanup();
-      reject(new Error("Could not reach Apps Script."));
+      reject(new Error("Could not reach Apps Script"));
     };
 
     function cleanup() {
@@ -207,45 +214,55 @@ async function apiRemoveStaff(pin, staffId) {
 }
 
 // ─────────────────────────────────────────────
-// Boot
+// Startup
 // ─────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", () => {
-  bindEvents();
+  bindButtons();
+  populateDropdowns();
   renderLegend();
+  buildPinPad();
   loadData();
 });
 
-function bindEvents() {
-  document.getElementById("prevWeekBtn")?.addEventListener("click", () => {
+function bindButtons() {
+  document.getElementById("prevWeekBtn").addEventListener("click", () => {
     weekStart = addDays(weekStart, -7);
     render();
   });
 
-  document.getElementById("nextWeekBtn")?.addEventListener("click", () => {
+  document.getElementById("nextWeekBtn").addEventListener("click", () => {
     weekStart = addDays(weekStart, 7);
     render();
   });
 
-  document.getElementById("todayBtn")?.addEventListener("click", () => {
+  document.getElementById("todayBtn").addEventListener("click", () => {
     weekStart = getMondayOfWeek(new Date());
     render();
   });
 
-  document.getElementById("refreshBtn")?.addEventListener("click", loadData);
+  document.getElementById("refreshBtn").addEventListener("click", loadData);
 
-  document.getElementById("managerLoginBtn")?.addEventListener("click", openPinModal);
-  document.getElementById("lockBtn")?.addEventListener("click", exitEditMode);
+  document.getElementById("managerLoginBtn").addEventListener("click", openPinOverlay);
+  document.getElementById("lockBtn").addEventListener("click", exitEditMode);
+  document.getElementById("closePinBtn").addEventListener("click", closePinOverlay);
 
-  document.getElementById("addStaffBtn")?.addEventListener("click", showAddStaffForm);
-  document.getElementById("cancelAddStaffBtn")?.addEventListener("click", hideAddStaffForm);
-  document.getElementById("saveAddStaffBtn")?.addEventListener("click", handleAddStaff);
+  document.getElementById("addStaffToggle").addEventListener("click", showAddStaffForm);
+  document.getElementById("cancelAddStaffBtn").addEventListener("click", hideAddStaffForm);
+  document.getElementById("addStaffBtn").addEventListener("click", handleAddStaff);
 
-  document.getElementById("modalCancelBtn")?.addEventListener("click", closeAssignmentModal);
-  document.getElementById("modalSaveBtn")?.addEventListener("click", saveAssignmentModal);
-  document.getElementById("modalClearBtn")?.addEventListener("click", clearAssignmentCell);
+  document.getElementById("closeAssignmentBtn").addEventListener("click", closeAssignmentOverlay);
+  document.getElementById("cancelAssignmentBtn").addEventListener("click", closeAssignmentOverlay);
+  document.getElementById("saveAssignmentBtn").addEventListener("click", saveAssignment);
+  document.getElementById("clearAssignmentBtn").addEventListener("click", clearAssignment);
 
-  document.getElementById("pinCancelBtn")?.addEventListener("click", closePinModal);
+  document.getElementById("assignmentOverlay").addEventListener("click", e => {
+    if (e.target.id === "assignmentOverlay") closeAssignmentOverlay();
+  });
+
+  document.getElementById("pinOverlay").addEventListener("click", e => {
+    if (e.target.id === "pinOverlay") closePinOverlay();
+  });
 }
 
 // ─────────────────────────────────────────────
@@ -271,38 +288,39 @@ async function loadData() {
 // ─────────────────────────────────────────────
 
 function render() {
-  renderHeaderStats();
-  renderWeekNav();
+  renderStats();
+  renderWeekLabel();
   renderStaffList();
   renderGrid();
   renderEditState();
 }
 
-function renderHeaderStats() {
+function renderStats() {
   const weekDays = getWeekDays();
   const totalSlots = staff.length * 7;
 
   let filledSlots = 0;
+
   weekDays.forEach(day => {
     staff.forEach(s => {
       if (assignments[assignKey(s.id, day)]) filledSlots++;
     });
   });
 
-  document.getElementById("staffCount").textContent = staff.length;
-  document.getElementById("assignedCount").textContent = filledSlots;
-  document.getElementById("openCount").textContent = totalSlots - filledSlots;
+  document.getElementById("statStaff").textContent = staff.length;
+  document.getElementById("statAssigned").textContent = filledSlots;
+  document.getElementById("statOpen").textContent = totalSlots - filledSlots;
+  document.getElementById("staffHeader").textContent = `Staff (${staff.length})`;
 }
 
-function renderWeekNav() {
-  const weekDays = getWeekDays();
+function renderWeekLabel() {
+  const days = getWeekDays();
   document.getElementById("weekLabel").textContent =
-    `Week of ${fmtDate(weekDays[0])} – ${fmtDate(weekDays[6])}`;
+    `Week of ${fmtDate(days[0])} – ${fmtDate(days[6])}`;
 }
 
 function renderLegend() {
   const legend = document.getElementById("legend");
-  if (!legend) return;
 
   legend.innerHTML = UNITS.map(u => `
     <span class="legend-item">
@@ -310,13 +328,12 @@ function renderLegend() {
       ${escapeHtml(u.label)}
     </span>
   `).join("") + `
-    <span id="editHint" class="edit-hint hidden">// click any cell to assign</span>
+    <span class="edit-hint hidden" id="editHint">// click any cell to assign</span>
   `;
 }
 
 function renderStaffList() {
   const staffList = document.getElementById("staffList");
-  if (!staffList) return;
 
   staffList.innerHTML = staff.map(s => {
     const u = unitMeta(s.unit);
@@ -328,86 +345,88 @@ function renderStaffList() {
           <div class="staff-name">${escapeHtml(s.name)}</div>
           <div class="staff-unit-tag">${escapeHtml(u.label)}</div>
         </div>
-        ${isEditMode ? `<button class="staff-remove" onclick="handleRemoveStaff('${escapeHtml(s.id)}','${escapeHtml(s.name)}')">×</button>` : ""}
+        ${isEditMode ? `
+          <button class="staff-remove" data-staff-id="${escapeHtml(s.id)}" data-staff-name="${escapeHtml(s.name)}">×</button>
+        ` : ""}
       </div>
     `;
   }).join("");
 
-  document.getElementById("staffListCount").textContent = staff.length;
+  document.querySelectorAll(".staff-remove").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      handleRemoveStaff(btn.dataset.staffId, btn.dataset.staffName);
+    });
+  });
 }
 
 function renderGrid() {
-  const gridArea = document.getElementById("gridArea");
-  if (!gridArea) return;
+  const gridHeader = document.getElementById("gridHeader");
+  const gridBody = document.getElementById("gridBody");
+  const gridTable = document.getElementById("gridTable");
+  const loadingMessage = document.getElementById("loadingMessage");
 
   const weekDays = getWeekDays();
 
   if (!staff.length) {
-    gridArea.innerHTML = `
-      <div class="loading-message">
-        // No staff loaded yet. Use Manager Login → Add Staff.
-      </div>
-    `;
+    loadingMessage.classList.remove("hidden");
+    loadingMessage.textContent = "// No staff loaded yet. Use Manager Login → Add Staff.";
+    gridTable.classList.add("hidden");
     return;
   }
 
-  const header = `
-    <thead>
-      <tr>
-        ${weekDays.map((d, i) => `
-          <th class="${isToday(d) ? "today" : ""}">
-            ${DAY_SHORT[i]}
-            <span class="th-date">${fmtDate(d)}</span>
-          </th>
-        `).join("")}
-      </tr>
-    </thead>
-  `;
+  loadingMessage.classList.add("hidden");
+  gridTable.classList.remove("hidden");
 
-  const body = `
-    <tbody>
-      ${staff.map(s => `
-        <tr>
-          ${weekDays.map((d, i) => {
-            const key = assignKey(s.id, d);
-            const asgn = assignments[key];
-            const u = unitMeta(s.unit);
-            const saving = savingKeys.has(key);
+  gridHeader.innerHTML = weekDays.map((day, i) => `
+    <th class="${isToday(day) ? "today" : ""}">
+      ${DAY_SHORT[i]}
+      <span class="th-date">${fmtDate(day)}</span>
+    </th>
+  `).join("");
 
-            if (asgn) {
-              return `
-                <td class="${isToday(d) ? "today-col" : ""} ${isEditMode ? "editable" : ""}"
-                    onclick="openAssignmentModal('${escapeHtml(s.id)}','${fmtISO(d)}')">
-                  <div class="assignment-chip ${saving ? "saving" : ""}"
-                       style="background:${u.bg};border-left:3px solid ${u.color}">
-                    <div class="chip-role" style="color:${u.color}">${escapeHtml(asgn.role || "—")}</div>
-                    <div class="chip-location" style="color:${u.color}">${escapeHtml(asgn.location || "—")}</div>
-                    <div class="chip-note" style="color:${u.color}">${escapeHtml(asgn.note || "")}</div>
-                  </div>
-                </td>
-              `;
-            }
+  gridBody.innerHTML = staff.map(s => `
+    <tr>
+      ${weekDays.map(day => {
+        const key = assignKey(s.id, day);
+        const asgn = assignments[key];
+        const u = unitMeta(s.unit);
+        const saving = savingKeys.has(key);
 
-            return `
-              <td class="${isToday(d) ? "today-col" : ""} ${isEditMode ? "editable" : ""}"
-                  onclick="openAssignmentModal('${escapeHtml(s.id)}','${fmtISO(d)}')">
-                <div class="empty-cell">
-                  ${isEditMode ? `<span class="empty-cell-plus">+</span>` : ""}
-                </div>
-              </td>
-            `;
-          }).join("")}
-        </tr>
-      `).join("")}
-    </tbody>
-  `;
+        if (asgn) {
+          return `
+            <td class="${isToday(day) ? "today-col" : ""} ${isEditMode ? "editable" : ""}"
+                data-staff-id="${escapeHtml(s.id)}"
+                data-date="${fmtISO(day)}">
+              <div class="assignment-chip ${saving ? "saving" : ""}"
+                   style="background:${u.bg};border-left:3px solid ${u.color}">
+                <div class="chip-role" style="color:${u.color}">${escapeHtml(asgn.role || "—")}</div>
+                <div class="chip-location" style="color:${u.color}">${escapeHtml(asgn.location || "—")}</div>
+                <div class="chip-note" style="color:${u.color}">${escapeHtml(asgn.note || "")}</div>
+              </div>
+            </td>
+          `;
+        }
 
-  gridArea.innerHTML = `
-    <table class="grid-table">
-      ${header}
-      ${body}
-    </table>
-  `;
+        return `
+          <td class="${isToday(day) ? "today-col" : ""} ${isEditMode ? "editable" : ""}"
+              data-staff-id="${escapeHtml(s.id)}"
+              data-date="${fmtISO(day)}">
+            <div class="empty-cell">
+              ${isEditMode ? `<span class="empty-cell-plus">+</span>` : ""}
+            </div>
+          </td>
+        `;
+      }).join("")}
+    </tr>
+  `).join("");
+
+  document.querySelectorAll("#gridBody td").forEach(cell => {
+    cell.addEventListener("click", () => {
+      if (!isEditMode) return;
+      openAssignmentOverlay(cell.dataset.staffId, cell.dataset.date);
+    });
+  });
 }
 
 function renderEditState() {
@@ -431,63 +450,94 @@ function renderEditState() {
     lockBtn.classList.add("hidden");
     sidebarAdd.classList.add("hidden");
     editHint?.classList.add("hidden");
+    hideAddStaffForm();
   }
+}
+
+// ─────────────────────────────────────────────
+// Dropdowns
+// ─────────────────────────────────────────────
+
+function populateDropdowns() {
+  const newStaffUnit = document.getElementById("newStaffUnit");
+  const modalLocation = document.getElementById("modalLocation");
+  const modalRole = document.getElementById("modalRole");
+
+  newStaffUnit.innerHTML = UNITS.map(u =>
+    `<option value="${escapeHtml(u.id)}">${escapeHtml(u.label)}</option>`
+  ).join("");
+
+  modalLocation.innerHTML = `<option value="">— Select location —</option>` +
+    LOCATIONS.map(l => `<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`).join("");
+
+  modalRole.innerHTML = `<option value="">— Select role/task —</option>` +
+    ROLES.map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join("");
 }
 
 // ─────────────────────────────────────────────
 // PIN
 // ─────────────────────────────────────────────
 
-function openPinModal() {
-  document.getElementById("pinModal").classList.remove("hidden");
-  resetPin();
-}
+function buildPinPad() {
+  const dots = document.getElementById("pinDots");
+  const keypad = document.getElementById("pinKeypad");
 
-function closePinModal() {
-  document.getElementById("pinModal").classList.add("hidden");
-  resetPin();
-}
+  dots.innerHTML = [0, 1, 2, 3].map(() => `<div class="pin-dot"></div>`).join("");
 
-function resetPin() {
-  const input = document.getElementById("pinHiddenInput");
-  if (input) input.value = "";
+  keypad.innerHTML = `
+    ${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n =>
+      `<button class="pin-key" data-pin="${n}">${n}</button>`
+    ).join("")}
+    <div></div>
+    <button class="pin-key" data-pin="0">0</button>
+    <button class="pin-key" id="pinDeleteBtn" style="font-size:14px">⌫</button>
+  `;
 
-  document.querySelectorAll(".pin-dot").forEach(dot => {
-    dot.classList.remove("filled", "error");
+  document.querySelectorAll("[data-pin]").forEach(btn => {
+    btn.addEventListener("click", () => pinPress(btn.dataset.pin));
   });
 
-  const msg = document.getElementById("pinErrorMsg");
-  if (msg) msg.textContent = "";
+  document.getElementById("pinDeleteBtn").addEventListener("click", pinDelete);
+}
+
+function openPinOverlay() {
+  pinDigits = "";
+  updatePinDots();
+  document.getElementById("pinError").textContent = "";
+  document.getElementById("pinOverlay").classList.remove("hidden");
+}
+
+function closePinOverlay() {
+  document.getElementById("pinOverlay").classList.add("hidden");
+  pinDigits = "";
+  updatePinDots();
 }
 
 function pinPress(num) {
-  const input = document.getElementById("pinHiddenInput");
-  if (!input || input.value.length >= 4) return;
+  if (pinDigits.length >= 4) return;
 
-  input.value += String(num);
-  updatePinDots(input.value);
+  pinDigits += String(num);
+  updatePinDots();
 
-  if (input.value.length === 4) {
+  if (pinDigits.length === 4) {
     setTimeout(() => {
-      managerPin = input.value;
+      managerPin = pinDigits;
       isEditMode = true;
-      closePinModal();
+      closePinOverlay();
       render();
     }, 120);
   }
 }
 
 function pinDelete() {
-  const input = document.getElementById("pinHiddenInput");
-  if (!input) return;
-
-  input.value = input.value.slice(0, -1);
-  updatePinDots(input.value);
+  pinDigits = pinDigits.slice(0, -1);
+  updatePinDots();
 }
 
-function updatePinDots(value) {
+function updatePinDots() {
   document.querySelectorAll(".pin-dot").forEach((dot, i) => {
-    dot.classList.toggle("filled", value.length > i);
+    dot.classList.toggle("filled", pinDigits.length > i);
+    dot.classList.remove("error");
   });
 }
 
@@ -502,16 +552,23 @@ function exitEditMode() {
 // ─────────────────────────────────────────────
 
 function showAddStaffForm() {
+  document.getElementById("addStaffToggle").classList.add("hidden");
   document.getElementById("addStaffForm").classList.remove("hidden");
-  document.getElementById("addStaffBtn").classList.add("hidden");
   document.getElementById("newStaffName").focus();
 }
 
 function hideAddStaffForm() {
-  document.getElementById("addStaffForm").classList.add("hidden");
-  document.getElementById("addStaffBtn").classList.remove("hidden");
-  document.getElementById("newStaffName").value = "";
-  document.getElementById("newStaffUnit").value = "warehouse";
+  const toggle = document.getElementById("addStaffToggle");
+  const form = document.getElementById("addStaffForm");
+
+  if (toggle) toggle.classList.remove("hidden");
+  if (form) form.classList.add("hidden");
+
+  const name = document.getElementById("newStaffName");
+  const unit = document.getElementById("newStaffUnit");
+
+  if (name) name.value = "";
+  if (unit) unit.value = "warehouse";
 }
 
 async function handleAddStaff() {
@@ -536,10 +593,10 @@ async function handleAddStaff() {
   try {
     await apiAddStaff(managerPin, s);
     setStatus("saved", `${name} added`);
-    loadData();
+    await loadData();
   } catch (err) {
     setStatus("error", `Add failed: ${err.message}`);
-    loadData();
+    await loadData();
   }
 }
 
@@ -554,10 +611,10 @@ async function handleRemoveStaff(id, name) {
   try {
     await apiRemoveStaff(managerPin, id);
     setStatus("saved", `${name} removed`);
-    loadData();
+    await loadData();
   } catch (err) {
     setStatus("error", `Remove failed: ${err.message}`);
-    loadData();
+    await loadData();
   }
 }
 
@@ -565,9 +622,7 @@ async function handleRemoveStaff(id, name) {
 // Assignments
 // ─────────────────────────────────────────────
 
-function openAssignmentModal(staffId, isoDate) {
-  if (!isEditMode) return;
-
+function openAssignmentOverlay(staffId, isoDate) {
   const s = staff.find(x => x.id === staffId);
   if (!s) return;
 
@@ -575,63 +630,41 @@ function openAssignmentModal(staffId, isoDate) {
   const key = `${staffId}__${isoDate}`;
   const existing = assignments[key];
 
-  activeModal = {
+  activeAssignment = {
     staffId,
     staffName: s.name,
     day,
     key
   };
 
-  document.getElementById("modalTitle").textContent = s.name;
-  document.getElementById("modalSub").textContent = `${fmtDate(day)} · ${isoDate}`;
-
-  populateModalDropdowns();
+  document.getElementById("modalStaffName").textContent = s.name;
+  document.getElementById("modalDate").textContent = `${fmtDate(day)} · ${isoDate}`;
 
   document.getElementById("modalLocation").value = existing?.location || "";
   document.getElementById("modalRole").value = existing?.role || "";
   document.getElementById("modalNote").value = existing?.note || "";
 
-  document.getElementById("modalClearBtn").classList.toggle("hidden", !existing);
-  document.getElementById("assignmentModal").classList.remove("hidden");
+  document.getElementById("clearAssignmentBtn").classList.toggle("hidden", !existing);
+  document.getElementById("assignmentOverlay").classList.remove("hidden");
 }
 
-function populateModalDropdowns() {
-  const loc = document.getElementById("modalLocation");
-  const role = document.getElementById("modalRole");
-  const unit = document.getElementById("newStaffUnit");
-
-  if (loc) {
-    loc.innerHTML = `<option value="">— Select location —</option>` +
-      LOCATIONS.map(l => `<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`).join("");
-  }
-
-  if (role) {
-    role.innerHTML = `<option value="">— Select role/task —</option>` +
-      ROLES.map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join("");
-  }
-
-  if (unit) {
-    unit.innerHTML = UNITS.map(u => `<option value="${u.id}">${escapeHtml(u.label)}</option>`).join("");
-  }
+function closeAssignmentOverlay() {
+  document.getElementById("assignmentOverlay").classList.add("hidden");
+  activeAssignment = null;
 }
 
-function closeAssignmentModal() {
-  document.getElementById("assignmentModal").classList.add("hidden");
-  activeModal = null;
-}
-
-async function saveAssignmentModal() {
-  if (!activeModal) return;
+async function saveAssignment() {
+  if (!activeAssignment) return;
 
   const location = document.getElementById("modalLocation").value;
   const role = document.getElementById("modalRole").value;
   const note = document.getElementById("modalNote").value;
 
-  const { staffId, day, key } = activeModal;
+  const { staffId, day, key } = activeAssignment;
 
-  closeAssignmentModal();
+  closeAssignmentOverlay();
 
-  if (!location && !role) {
+  if (!location && !role && !note) {
     delete assignments[key];
   } else {
     assignments[key] = {
@@ -645,26 +678,32 @@ async function saveAssignmentModal() {
 
   savingKeys.add(key);
   render();
+
   setStatus("saving", "Saving…");
 
   try {
     await apiSetAssignment(managerPin, key, staffId, fmtISO(day), location, role, note);
     savingKeys.delete(key);
     setStatus("saved", `Saved · ${new Date().toLocaleTimeString()}`);
-    loadData();
+    await loadData();
   } catch (err) {
     savingKeys.delete(key);
     setStatus("error", `Save failed: ${err.message}`);
-    if (err.message === "Invalid PIN") exitEditMode();
-    loadData();
+
+    if (err.message === "Invalid PIN") {
+      exitEditMode();
+    }
+
+    await loadData();
   }
 }
 
-async function clearAssignmentCell() {
-  if (!activeModal) return;
+async function clearAssignment() {
+  if (!activeAssignment) return;
 
-  const { staffId, day, key } = activeModal;
-  closeAssignmentModal();
+  const { staffId, day, key } = activeAssignment;
+
+  closeAssignmentOverlay();
 
   delete assignments[key];
   savingKeys.add(key);
@@ -676,16 +715,10 @@ async function clearAssignmentCell() {
     await apiSetAssignment(managerPin, key, staffId, fmtISO(day), "", "", "");
     savingKeys.delete(key);
     setStatus("saved", `Cleared · ${new Date().toLocaleTimeString()}`);
-    loadData();
+    await loadData();
   } catch (err) {
     savingKeys.delete(key);
     setStatus("error", `Clear failed: ${err.message}`);
-    loadData();
+    await loadData();
   }
 }
-
-// Expose functions needed by inline onclick handlers
-window.pinPress = pinPress;
-window.pinDelete = pinDelete;
-window.handleRemoveStaff = handleRemoveStaff;
-window.openAssignmentModal = openAssignmentModal;
