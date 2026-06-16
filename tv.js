@@ -78,18 +78,18 @@ function addDays(date, n) {
 }
 
 function fmtDate(d) {
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return d.toLocaleDateString("en-US", { month: "long", day: "numeric" });
 }
 
 function fmtMonthDayFromISO(iso) {
   const d = new Date(iso + "T00:00:00");
   if (isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return d.toLocaleDateString("en-US", { month: "long", day: "numeric" });
 }
 
 function fmtBirthday(month, day) {
   const d = new Date(new Date().getFullYear(), Number(month) - 1, Number(day));
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return d.toLocaleDateString("en-US", { month: "long", day: "numeric" });
 }
 
 function fmtISO(d) {
