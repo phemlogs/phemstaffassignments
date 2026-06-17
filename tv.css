@@ -15,7 +15,6 @@
   --header-height: 46px;
   --footer-height: 20px;
   --table-head-height: 25px;
-  --staff-count: 16;
 }
 
 * {
@@ -64,6 +63,7 @@ body {
   grid-template-rows: var(--header-height) 1fr var(--footer-height);
 }
 
+/* Header */
 .tv-header {
   height: var(--header-height);
   min-height: var(--header-height);
@@ -208,13 +208,17 @@ body {
   padding-left: 7px;
 }
 
+.tv-board tr {
+  height: var(--row-height, 72px);
+}
+
 .tv-board td {
   border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
   vertical-align: top;
-  padding: 2px;
-  height: calc((100vh - var(--header-height) - var(--footer-height) - var(--table-head-height) - 8px) / var(--staff-count));
-  max-height: calc((100vh - var(--header-height) - var(--footer-height) - var(--table-head-height) - 8px) / var(--staff-count));
+  padding: 3px;
+  height: var(--row-height, 72px);
+  max-height: var(--row-height, 72px);
   overflow: hidden;
 }
 
@@ -223,7 +227,7 @@ body {
 }
 
 .tv-staff-cell {
-  padding: 3px 5px !important;
+  padding: 4px 6px !important;
   vertical-align: middle !important;
   background: var(--light);
 }
@@ -237,9 +241,9 @@ body {
 }
 
 .tv-unit-bar {
-  width: 3px;
+  width: 4px;
   height: 68%;
-  min-height: 16px;
+  min-height: 18px;
   border-radius: 3px;
   flex-shrink: 0;
 }
@@ -249,8 +253,8 @@ body {
 }
 
 .tv-staff-name {
-  font-size: clamp(7px, 0.68vw, 11px);
-  font-weight: 800;
+  font-size: clamp(8px, 0.76vw, 13px);
+  font-weight: 900;
   color: var(--navy);
   white-space: nowrap;
   overflow: hidden;
@@ -259,7 +263,7 @@ body {
 
 .tv-staff-unit {
   font-family: 'DM Mono', monospace;
-  font-size: clamp(5px, 0.48vw, 8px);
+  font-size: clamp(5px, 0.50vw, 8px);
   color: var(--grey);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -275,21 +279,21 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .tv-assignment {
   border-left: 4px solid var(--blue);
   border-radius: 5px;
-  padding: 5px 7px;
-  min-height: 42px;
+  padding: 4px 7px;
+  min-height: 36px;
   overflow: hidden;
-  line-height: 1.15;
+  line-height: 1.1;
   flex-shrink: 0;
 }
 
 .tv-assignment-role {
-  font-size: clamp(10px, 0.95vw, 16px);
+  font-size: clamp(9px, 0.88vw, 15px);
   font-weight: 900;
   white-space: nowrap;
   overflow: hidden;
@@ -298,7 +302,7 @@ body {
 
 .tv-assignment-loc {
   font-family: 'DM Mono', monospace;
-  font-size: clamp(8px, 0.75vw, 12px);
+  font-size: clamp(7px, 0.68vw, 11px);
   opacity: 0.85;
   white-space: nowrap;
   overflow: hidden;
@@ -307,9 +311,9 @@ body {
 
 .tv-assignment-note {
   font-family: 'DM Mono', monospace;
-  font-size: clamp(8px, 0.75vw, 12px);
+  font-size: clamp(7px, 0.68vw, 11px);
   font-weight: 800;
-  margin-top: 2px;
+  margin-top: 1px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -324,10 +328,10 @@ body {
 
 .tv-more {
   font-family: 'DM Mono', monospace;
-  font-size: clamp(4px, 0.45vw, 7px);
+  font-size: clamp(7px, 0.65vw, 10px);
   color: var(--grey);
   text-align: center;
-  padding-top: 0;
+  padding-top: 1px;
 }
 
 .loading-cell {
