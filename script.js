@@ -4,10 +4,16 @@
 // Manager PIN can edit all rows
 // Staff PIN can edit only that staff person's row
 // Preserves current custom UNITS / LOCATIONS / ROLES
-// Fixed row height alignment
+// Normal board only — NO TV mode / NO auto-scroll
+// Auto-refreshes only when NOT editing
 // ─────────────────────────────────────────────
 
 const DAY_SHORT = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+
+// Normal page auto-refresh.
+// 5 minutes is safest for the edit/PIN page.
+const NORMAL_AUTO_REFRESH_MS = 5 * 60 * 1000;
+let normalAutoRefreshTimer = null;
 
 const UNITS = [
   { id: "BW SD Driver",  label: "San Diego Driver",          color: "#236092", bg: "#EAF6FA" },
@@ -30,8 +36,9 @@ const LOCATIONS = [
   "San Bernardino",
   "Orange County",
   "TV Screen Deployment",
-  "Remote / WFH",
-  "Leave / Off"
+  "Remote / TELEWORK",
+  "Leave / Off",
+  "Other"
 ];
 
 const ROLES = [
@@ -170,12 +177,6 @@ function getMaxAssignmentsForStaffInWeek(staffId) {
 
 function getRowHeightForStaff(staffId) {
   const maxAssignments = getMaxAssignmentsForStaffInWeek(staffId);
-
-  /*
-    Base row must be taller than the empty grid cell.
-    Empty cell is 56px + 16px td padding + borders.
-    88px keeps left staff rows and right table rows aligned.
-  */
   const baseRowHeight = 88;
 
   if (maxAssignments <= 0) {
@@ -288,6 +289,7 @@ document.addEventListener("DOMContentLoaded", () => {
   renderLegend();
   buildPinPad();
   loadData();
+  startNormalAutoRefresh();
 });
 
 function bindButtons() {
@@ -346,6 +348,23 @@ async function loadData() {
   } catch (err) {
     setStatus("error", `Load error: ${err.message}`);
   }
+}
+
+function startNormalAutoRefresh() {
+  if (normalAutoRefreshTimer) {
+    clearInterval(normalAutoRefreshTimer);
+  }
+
+  normalAutoRefreshTimer = setInterval(() => {
+    const assignmentOverlayOpen = !document.getElementById("assignmentOverlay")?.classList.contains("hidden");
+    const pinOverlayOpen = !document.getElementById("pinOverlay")?.classList.contains("hidden");
+
+    if (isEditMode || assignmentOverlayOpen || pinOverlayOpen) {
+      return;
+    }
+
+    loadData();
+  }, NORMAL_AUTO_REFRESH_MS);
 }
 
 // ─────────────────────────────────────────────
@@ -408,7 +427,7 @@ function renderStaffList() {
     const editable = canEditStaff(s.id);
 
     return `
-      <div class="staff-row ${editable ? "clickable" : ""}" style="--row-height:${rowHeight}px">
+      <div class="staff-row ${editable ? "clickable" : ""}" style="--row-height:${rowHeight}px;height:${rowHeight}px;min-height:${rowHeight}px">
         <div class="unit-bar" style="background:${u.color}"></div>
         <div style="flex:1;min-width:0">
           <div class="staff-name">${escapeHtml(s.name)}</div>
@@ -458,7 +477,7 @@ function renderGrid() {
     const rowHeight = getRowHeightForStaff(s.id);
 
     return `
-      <tr>
+      <tr style="--row-height:${rowHeight}px;height:${rowHeight}px;min-height:${rowHeight}px">
         ${weekDays.map(day => {
           const isoDate = fmtISO(day);
           const u = unitMeta(s.unit);
@@ -469,7 +488,7 @@ function renderGrid() {
             <td class="${isToday(day) ? "today-col" : ""} ${editable ? "editable" : ""}"
                 data-staff-id="${escapeHtml(s.id)}"
                 data-date="${isoDate}"
-                style="--row-height:${rowHeight}px">
+                style="--row-height:${rowHeight}px;height:${rowHeight}px;min-height:${rowHeight}px">
               
               <div class="assignment-stack">
                 ${dayAssignments.map(asgn => `
