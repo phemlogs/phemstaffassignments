@@ -13,7 +13,7 @@ const DAY_SHORT = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 // 10 minutes: 10 * 60 * 1000
 // 2 minutes:  2 * 60 * 1000
 // 1 minute:   1 * 60 * 1000
-const AUTO_REFRESH_MS = 10 * 60 * 1000;
+const AUTO_REFRESH_MS = 2 * 60 * 1000;
 
 const BOARD_VIEW_MS = 32 * 1000;
 const ANNOUNCEMENT_VIEW_MS = 14 * 1000;
