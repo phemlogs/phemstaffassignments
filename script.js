@@ -6,6 +6,7 @@
 // Preserves current custom UNITS / LOCATIONS / ROLES
 // Normal board only — NO TV mode / NO auto-scroll
 // Auto-refreshes only when NOT editing
+// Assignment chips are colored by ACTION, not staff/unit
 // ─────────────────────────────────────────────
 
 const DAY_SHORT = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
@@ -25,6 +26,19 @@ const UNITS = [
   { id: "admin",         label: "Admin / Other",             color: "#6D7378", bg: "#F7FAFC" }
 ];
 
+// Colors now mean ACTION / STATUS, not staff unit.
+const ACTION_COLORS = [
+  { id: "unavailable", label: "Unavailable / Leave / Off", color: "#E03C31", bg: "#FFF0EF" },
+  { id: "driving", label: "Driving / Delivery", color: "#236092", bg: "#EAF6FA" },
+  { id: "biowatch", label: "BioWatch", color: "#05C3DE", bg: "#E6F9FC" },
+  { id: "warehouse", label: "Warehouse Floor", color: "#FFA300", bg: "#FFF7E6" },
+  { id: "training", label: "Training", color: "#7B4FBF", bg: "#F3EEFF" },
+  { id: "meeting", label: "Meeting / Admin", color: "#6D7378", bg: "#F7FAFC" },
+  { id: "tv", label: "TV Screen Deployment", color: "#008B8B", bg: "#E6F5F5" },
+  { id: "remote", label: "Remote / WFH", color: "#3aaa35", bg: "#EEF9EF" },
+  { id: "other", label: "Other Assignment", color: "#002138", bg: "#F7FAFC" }
+];
+
 const LOCATIONS = [
   "Worsham Warehouse",
   "Worsham Office",
@@ -36,9 +50,8 @@ const LOCATIONS = [
   "San Bernardino",
   "Orange County",
   "TV Screen Deployment",
-  "Remote / TELEWORK",
-  "Leave / Off",
-  "Other"
+  "Remote / WFH",
+  "Leave / Off"
 ];
 
 const ROLES = [
@@ -77,6 +90,78 @@ let pinSubmitting = false;
 
 function unitMeta(id) {
   return UNITS.find(u => u.id === id) || UNITS[6];
+}
+
+function actionMeta(role, location) {
+  const text = `${role || ""} ${location || ""}`.toLowerCase();
+
+  if (
+    text.includes("unavailable") ||
+    text.includes("leave") ||
+    text.includes("off")
+  ) {
+    return ACTION_COLORS[0];
+  }
+
+  if (
+    text.includes("driving") ||
+    text.includes("driver") ||
+    text.includes("pickup") ||
+    text.includes("delivery") ||
+    text.includes("fleet") ||
+    text.includes("vehicle") ||
+    text.includes("san diego") ||
+    text.includes("riverside") ||
+    text.includes("pasadena") ||
+    text.includes("orange county") ||
+    text.includes("san bernardino")
+  ) {
+    return ACTION_COLORS[1];
+  }
+
+  if (
+    text.includes("biowatch") ||
+    text.includes("bio watch")
+  ) {
+    return ACTION_COLORS[2];
+  }
+
+  if (
+    text.includes("warehouse") ||
+    text.includes("worsham warehouse") ||
+    text.includes("warehouse floor")
+  ) {
+    return ACTION_COLORS[3];
+  }
+
+  if (text.includes("training")) {
+    return ACTION_COLORS[4];
+  }
+
+  if (
+    text.includes("meeting") ||
+    text.includes("administrative") ||
+    text.includes("admin") ||
+    text.includes("office")
+  ) {
+    return ACTION_COLORS[5];
+  }
+
+  if (
+    text.includes("tv screen") ||
+    text.includes("screen deployment")
+  ) {
+    return ACTION_COLORS[6];
+  }
+
+  if (
+    text.includes("remote") ||
+    text.includes("wfh")
+  ) {
+    return ACTION_COLORS[7];
+  }
+
+  return ACTION_COLORS[8];
 }
 
 function makeId() {
@@ -408,13 +493,13 @@ function renderWeekLabel() {
 function renderLegend() {
   const legend = document.getElementById("legend");
 
-  legend.innerHTML = UNITS.map(u => `
+  legend.innerHTML = ACTION_COLORS.map(a => `
     <span class="legend-item">
-      <span class="legend-dot" style="background:${u.color}"></span>
-      ${escapeHtml(u.label)}
+      <span class="legend-dot" style="background:${a.color}"></span>
+      ${escapeHtml(a.label)}
     </span>
   `).join("") + `
-    <span class="edit-hint hidden" id="editHint">// staff codes unlock one row only</span>
+    <span class="edit-hint hidden" id="editHint">// colors = action/status, not staff</span>
   `;
 }
 
@@ -428,7 +513,7 @@ function renderStaffList() {
 
     return `
       <div class="staff-row ${editable ? "clickable" : ""}" style="--row-height:${rowHeight}px;height:${rowHeight}px;min-height:${rowHeight}px">
-        <div class="unit-bar" style="background:${u.color}"></div>
+        <div class="unit-bar" style="background:#D9E2EC"></div>
         <div style="flex:1;min-width:0">
           <div class="staff-name">${escapeHtml(s.name)}</div>
           <div class="staff-unit-tag">${escapeHtml(u.label)}</div>
@@ -480,7 +565,6 @@ function renderGrid() {
       <tr style="--row-height:${rowHeight}px;height:${rowHeight}px;min-height:${rowHeight}px">
         ${weekDays.map(day => {
           const isoDate = fmtISO(day);
-          const u = unitMeta(s.unit);
           const dayAssignments = getAssignmentsForStaffDay(s.id, isoDate);
           const editable = canEditStaff(s.id);
 
@@ -491,17 +575,21 @@ function renderGrid() {
                 style="--row-height:${rowHeight}px;height:${rowHeight}px;min-height:${rowHeight}px">
               
               <div class="assignment-stack">
-                ${dayAssignments.map(asgn => `
-                  <div class="assignment-chip mini-chip ${savingKeys.has(asgn.key) ? "saving" : ""}"
-                       data-assignment-key="${escapeHtml(asgn.key)}"
-                       data-staff-id="${escapeHtml(s.id)}"
-                       data-date="${isoDate}"
-                       style="background:${u.bg};border-left:3px solid ${u.color}">
-                    <div class="chip-role" style="color:${u.color}">${escapeHtml(asgn.role || "—")}</div>
-                    <div class="chip-location" style="color:${u.color}">${escapeHtml(asgn.location || "—")}</div>
-                    <div class="chip-note" style="color:${u.color}">${escapeHtml(asgn.note || "")}</div>
-                  </div>
-                `).join("")}
+                ${dayAssignments.map(asgn => {
+                  const a = actionMeta(asgn.role, asgn.location);
+
+                  return `
+                    <div class="assignment-chip mini-chip ${savingKeys.has(asgn.key) ? "saving" : ""}"
+                         data-assignment-key="${escapeHtml(asgn.key)}"
+                         data-staff-id="${escapeHtml(s.id)}"
+                         data-date="${isoDate}"
+                         style="background:${a.bg};border-left:3px solid ${a.color}">
+                      <div class="chip-role" style="color:${a.color}">${escapeHtml(asgn.role || "—")}</div>
+                      <div class="chip-location" style="color:${a.color}">${escapeHtml(asgn.location || "—")}</div>
+                      <div class="chip-note" style="color:${a.color}">${escapeHtml(asgn.note || "")}</div>
+                    </div>
+                  `;
+                }).join("")}
 
                 ${dayAssignments.length === 0 ? `
                   <div class="empty-cell">
