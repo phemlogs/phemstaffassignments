@@ -275,22 +275,22 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 4px;
 }
 
 .tv-assignment {
-  border-left: 2px solid var(--blue);
-  border-radius: 2px;
-  padding: 1px 3px;
-  min-height: 0;
+  border-left: 4px solid var(--blue);
+  border-radius: 5px;
+  padding: 5px 7px;
+  min-height: 42px;
   overflow: hidden;
-  line-height: 1.02;
-  flex-shrink: 1;
+  line-height: 1.15;
+  flex-shrink: 0;
 }
 
 .tv-assignment-role {
-  font-size: clamp(5px, 0.55vw, 8px);
-  font-weight: 800;
+  font-size: clamp(10px, 0.95vw, 16px);
+  font-weight: 900;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -298,8 +298,8 @@ body {
 
 .tv-assignment-loc {
   font-family: 'DM Mono', monospace;
-  font-size: clamp(4px, 0.45vw, 7px);
-  opacity: 0.78;
+  font-size: clamp(8px, 0.75vw, 12px);
+  opacity: 0.85;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -307,9 +307,9 @@ body {
 
 .tv-assignment-note {
   font-family: 'DM Mono', monospace;
-  font-size: clamp(4px, 0.48vw, 7px);
-  font-weight: 700;
-  margin-top: 1px;
+  font-size: clamp(8px, 0.75vw, 12px);
+  font-weight: 800;
+  margin-top: 2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
