@@ -9,7 +9,7 @@ const DAY_SHORT = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 
 const AUTO_REFRESH_MS = 10 * 60 * 1000;
 
-const STAFF_PER_PAGE = 10;
+const STAFF_PER_PAGE = 8;
 
 const BOARD_VIEW_MS = 32 * 1000;
 const ANNOUNCEMENT_VIEW_MS = 14 * 1000;
