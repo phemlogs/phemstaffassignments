@@ -1,15 +1,18 @@
 // ─────────────────────────────────────────────
 // PHEM Staff Assignments — TV Read-Only Dashboard
 // Separate page. Does NOT modify the working edit board.
-// Auto-refresh: every 10 minutes
+// Auto-refresh: every 10 minutes by default
+// Dynamic pagination: automatically pushes staff to next page if they do not fit
 // Rotation: staff pages → announcements → QR → shifts → repeat
 // ─────────────────────────────────────────────
 
 const DAY_SHORT = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 
+// Change this for TV refresh timing.
+// 10 minutes: 10 * 60 * 1000
+// 2 minutes:  2 * 60 * 1000
+// 1 minute:   1 * 60 * 1000
 const AUTO_REFRESH_MS = 2 * 60 * 1000;
-
-const STAFF_PER_PAGE = 8;
 
 const BOARD_VIEW_MS = 32 * 1000;
 const ANNOUNCEMENT_VIEW_MS = 14 * 1000;
@@ -18,7 +21,7 @@ const SHIFTS_VIEW_MS = 18 * 1000;
 
 const UNITS = [
   { id: "BW SD Driver",  label: "San Diego Driver",          color: "#236092", bg: "#EAF6FA" },
-  { id: "BW SC Driver",  label: "Southcoast Driver",         color: "#FFA300", bg: "#FFF7E6" },
+  { id: "BW SC Driver",  label: "Soutcoast Driver",          color: "#FFA300", bg: "#FFF7E6" },
   { id: "Biowatch",      label: "Biowatch",                  color: "#05C3DE", bg: "#E6F9FC" },
   { id: "Logistics",     label: "Logistics",                 color: "#7B4FBF", bg: "#F3EEFF" },
   { id: "Logistics WH",  label: "Warehouse",                 color: "#E03C31", bg: "#FFF0EF" },
@@ -39,7 +42,9 @@ let weekStart = getMondayOfWeek(new Date());
 let autoRefreshTimer = null;
 let rotationTimer = null;
 let clockTimer = null;
+let resizeTimer = null;
 
+let staffPages = [];
 let currentBoardPage = 0;
 let currentScreen = "board";
 
@@ -50,6 +55,9 @@ let currentScreen = "board";
 document.addEventListener("DOMContentLoaded", async () => {
   renderLegend();
   startClock();
+
+  window.addEventListener("resize", handleResize);
+
   await loadData();
   startAutoRefresh();
   startPageRotation();
@@ -78,7 +86,7 @@ function addDays(date, n) {
 }
 
 function fmtDate(d) {
-  return d.toLocaleDateString("en-US", { month: "long", day: "numeric" });
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 function fmtMonthDayFromISO(iso) {
@@ -131,15 +139,6 @@ function getWeekDays() {
   return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 }
 
-function getTotalBoardPages() {
-  return Math.max(1, Math.ceil(staff.length / STAFF_PER_PAGE));
-}
-
-function getStaffForCurrentPage() {
-  const start = currentBoardPage * STAFF_PER_PAGE;
-  return staff.slice(start, start + STAFF_PER_PAGE);
-}
-
 function getAssignmentsForStaffDay(staffId, isoDate) {
   return Object.entries(assignments)
     .map(([key, value]) => ({
@@ -155,12 +154,126 @@ function getAssignmentsForStaffDay(staffId, isoDate) {
     });
 }
 
+function getMaxAssignmentsForStaffInWeek(staffId) {
+  const days = getWeekDays();
+  let max = 0;
+
+  days.forEach(day => {
+    const count = getAssignmentsForStaffDay(staffId, fmtISO(day)).length;
+    if (count > max) max = count;
+  });
+
+  return max;
+}
+
 function setRefreshLabel(message) {
   const el = document.getElementById("refreshLabel");
   if (el) el.textContent = message;
 
   const ann = document.getElementById("announcementRefreshLabel");
   if (ann) ann.textContent = message;
+}
+
+// ─────────────────────────────────────────────
+// Dynamic pagination
+// ─────────────────────────────────────────────
+
+function getAvailableBoardHeight() {
+  const wrap = document.querySelector(".tv-board-wrap");
+  const thead = document.querySelector(".tv-board thead");
+
+  if (!wrap || !thead) {
+    return 700;
+  }
+
+  const wrapHeight = wrap.clientHeight || 700;
+  const headHeight = thead.offsetHeight || 25;
+
+  // Small buffer so the last row does not kiss the footer/bottom border.
+  return Math.max(250, wrapHeight - headHeight - 10);
+}
+
+function estimateRowHeight(staffId) {
+  const maxAssignments = getMaxAssignmentsForStaffInWeek(staffId);
+
+  // Empty rows can be smaller.
+  if (maxAssignments <= 0) {
+    return 54;
+  }
+
+  // Assignment chips are intentionally readable on TV.
+  const chipHeight = 39;
+  const gap = 3;
+  const cellPadding = 10;
+  const staffPadding = 4;
+
+  const assignmentHeight =
+    (maxAssignments * chipHeight) +
+    ((maxAssignments - 1) * gap) +
+    cellPadding +
+    staffPadding;
+
+  return Math.max(62, assignmentHeight);
+}
+
+function buildStaffPages() {
+  const availableHeight = getAvailableBoardHeight();
+
+  const pages = [];
+  let currentPage = [];
+  let currentHeight = 0;
+
+  staff.forEach(s => {
+    let rowHeight = estimateRowHeight(s.id);
+
+    // If one person somehow has too many chips, keep the row on its own page
+    // and cap the height so it does not wreck the full screen.
+    rowHeight = Math.min(rowHeight, availableHeight);
+
+    const rowPackage = {
+      staff: s,
+      rowHeight
+    };
+
+    const wouldOverflow = currentPage.length > 0 && currentHeight + rowHeight > availableHeight;
+
+    if (wouldOverflow) {
+      pages.push(currentPage);
+      currentPage = [rowPackage];
+      currentHeight = rowHeight;
+    } else {
+      currentPage.push(rowPackage);
+      currentHeight += rowHeight;
+    }
+  });
+
+  if (currentPage.length > 0) {
+    pages.push(currentPage);
+  }
+
+  staffPages = pages.length ? pages : [[]];
+
+  if (currentBoardPage >= staffPages.length) {
+    currentBoardPage = 0;
+  }
+}
+
+function getTotalBoardPages() {
+  return Math.max(1, staffPages.length);
+}
+
+function getStaffForCurrentPage() {
+  return staffPages[currentBoardPage] || [];
+}
+
+function handleResize() {
+  clearTimeout(resizeTimer);
+
+  resizeTimer = setTimeout(() => {
+    buildStaffPages();
+    renderBoardPageLabel();
+    renderBoard();
+  }, 250);
 }
 
 // ─────────────────────────────────────────────
@@ -196,12 +309,6 @@ async function loadData() {
     staff = data.staff || [];
     assignments = data.assignments || {};
     tvData = data.tv || { messages: [], events: [], birthdays: [], shifts: [] };
-
-    const totalPages = getTotalBoardPages();
-
-    if (currentBoardPage >= totalPages) {
-      currentBoardPage = 0;
-    }
 
     render();
 
@@ -284,6 +391,7 @@ function showBoardPage() {
   currentScreen = "board";
   setActivePage("boardPage");
 
+  buildStaffPages();
   renderBoard();
   renderBoardPageLabel();
 }
@@ -318,8 +426,12 @@ function renderBoardPageLabel() {
     return;
   }
 
-  const start = currentBoardPage * STAFF_PER_PAGE + 1;
-  const end = Math.min(staff.length, (currentBoardPage + 1) * STAFF_PER_PAGE);
+  let start = 1;
+  for (let i = 0; i < currentBoardPage; i++) {
+    start += staffPages[i].length;
+  }
+
+  const end = start + (staffPages[currentBoardPage]?.length || 0) - 1;
 
   el.textContent = `Staff Page ${currentBoardPage + 1} of ${totalPages} · ${start}–${end} of ${staff.length}`;
 }
@@ -354,6 +466,7 @@ function updateClock() {
 
 function render() {
   renderWeek();
+  buildStaffPages();
   renderStats();
   renderBoardPageLabel();
   renderBoard();
@@ -418,8 +531,6 @@ function renderBoard() {
   if (!body) return;
 
   if (!staff.length) {
-    document.documentElement.style.setProperty("--staff-count", 1);
-
     body.innerHTML = `
       <tr>
         <td colspan="8" class="loading-cell">No staff loaded</td>
@@ -428,15 +539,16 @@ function renderBoard() {
     return;
   }
 
-  const pageStaff = getStaffForCurrentPage();
-  document.documentElement.style.setProperty("--staff-count", Math.max(pageStaff.length, 1));
+  const pageRows = getStaffForCurrentPage();
 
-  body.innerHTML = pageStaff.map(s => {
+  body.innerHTML = pageRows.map(row => {
+    const s = row.staff;
+    const rowHeight = row.rowHeight;
     const u = unitMeta(s.unit);
 
     return `
-      <tr>
-        <td class="tv-staff-cell">
+      <tr style="--row-height:${rowHeight}px">
+        <td class="tv-staff-cell" style="--row-height:${rowHeight}px">
           <div class="tv-staff-inner">
             <div class="tv-unit-bar" style="background:${u.color}"></div>
             <div class="tv-staff-text">
@@ -451,7 +563,7 @@ function renderBoard() {
           const dayAssignments = getAssignmentsForStaffDay(s.id, iso);
 
           return `
-            <td class="${isToday(day) ? "today-cell" : ""}">
+            <td class="${isToday(day) ? "today-cell" : ""}" style="--row-height:${rowHeight}px">
               ${renderAssignmentCell(dayAssignments, u)}
             </td>
           `;
@@ -486,6 +598,10 @@ function renderAssignmentCell(dayAssignments, unit) {
     </div>
   `;
 }
+
+// ─────────────────────────────────────────────
+// Announcements
+// ─────────────────────────────────────────────
 
 function renderAnnouncements() {
   renderMessageOfDay();
@@ -558,6 +674,10 @@ function renderBirthdays() {
   `).join("");
 }
 
+// ─────────────────────────────────────────────
+// Shifts
+// ─────────────────────────────────────────────
+
 function renderShifts() {
   const el = document.getElementById("shiftsList");
   if (!el) return;
@@ -578,6 +698,10 @@ function renderShifts() {
     </div>
   `).join("");
 }
+
+// ─────────────────────────────────────────────
+// Error
+// ─────────────────────────────────────────────
 
 function renderError(message) {
   const body = document.getElementById("boardBody");
