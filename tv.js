@@ -4,6 +4,7 @@
 // Auto-refresh: every 10 minutes by default
 // Dynamic pagination: automatically pushes staff to next page if they do not fit
 // Rotation: staff pages → announcements → QR → shifts → repeat
+// Assignment chips are colored by ACTION, not staff/unit
 // ─────────────────────────────────────────────
 
 const DAY_SHORT = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
@@ -12,7 +13,7 @@ const DAY_SHORT = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 // 10 minutes: 10 * 60 * 1000
 // 2 minutes:  2 * 60 * 1000
 // 1 minute:   1 * 60 * 1000
-const AUTO_REFRESH_MS = 2 * 60 * 1000;
+const AUTO_REFRESH_MS = 10 * 60 * 1000;
 
 const BOARD_VIEW_MS = 32 * 1000;
 const ANNOUNCEMENT_VIEW_MS = 14 * 1000;
@@ -27,6 +28,19 @@ const UNITS = [
   { id: "Logistics WH",  label: "Warehouse",                 color: "#E03C31", bg: "#FFF0EF" },
   { id: "Logistics GS",  label: "Logistics Ground Support",  color: "#008B8B", bg: "#E6F5F5" },
   { id: "admin",         label: "Admin / Other",             color: "#6D7378", bg: "#F7FAFC" }
+];
+
+// Colors now mean ACTION / STATUS, not staff unit.
+const ACTION_COLORS = [
+  { id: "unavailable", label: "Unavailable / Leave / Off", color: "#E03C31", bg: "#FFF0EF" },
+  { id: "driving", label: "Driving / Delivery", color: "#236092", bg: "#EAF6FA" },
+  { id: "biowatch", label: "BioWatch", color: "#05C3DE", bg: "#E6F9FC" },
+  { id: "warehouse", label: "Warehouse Floor", color: "#FFA300", bg: "#FFF7E6" },
+  { id: "training", label: "Training", color: "#7B4FBF", bg: "#F3EEFF" },
+  { id: "meeting", label: "Meeting / Admin", color: "#6D7378", bg: "#F7FAFC" },
+  { id: "tv", label: "TV Screen Deployment", color: "#008B8B", bg: "#E6F5F5" },
+  { id: "remote", label: "Remote / WFH", color: "#3aaa35", bg: "#EEF9EF" },
+  { id: "other", label: "Other Assignment", color: "#002138", bg: "#F7FAFC" }
 ];
 
 let staff = [];
@@ -69,6 +83,78 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 function unitMeta(id) {
   return UNITS.find(u => u.id === id) || UNITS[6];
+}
+
+function actionMeta(role, location) {
+  const text = `${role || ""} ${location || ""}`.toLowerCase();
+
+  if (
+    text.includes("unavailable") ||
+    text.includes("leave") ||
+    text.includes("off")
+  ) {
+    return ACTION_COLORS[0];
+  }
+
+  if (
+    text.includes("driving") ||
+    text.includes("driver") ||
+    text.includes("pickup") ||
+    text.includes("delivery") ||
+    text.includes("fleet") ||
+    text.includes("vehicle") ||
+    text.includes("san diego") ||
+    text.includes("riverside") ||
+    text.includes("pasadena") ||
+    text.includes("orange county") ||
+    text.includes("san bernardino")
+  ) {
+    return ACTION_COLORS[1];
+  }
+
+  if (
+    text.includes("biowatch") ||
+    text.includes("bio watch")
+  ) {
+    return ACTION_COLORS[2];
+  }
+
+  if (
+    text.includes("warehouse") ||
+    text.includes("worsham warehouse") ||
+    text.includes("warehouse floor")
+  ) {
+    return ACTION_COLORS[3];
+  }
+
+  if (text.includes("training")) {
+    return ACTION_COLORS[4];
+  }
+
+  if (
+    text.includes("meeting") ||
+    text.includes("administrative") ||
+    text.includes("admin") ||
+    text.includes("office")
+  ) {
+    return ACTION_COLORS[5];
+  }
+
+  if (
+    text.includes("tv screen") ||
+    text.includes("screen deployment")
+  ) {
+    return ACTION_COLORS[6];
+  }
+
+  if (
+    text.includes("remote") ||
+    text.includes("wfh")
+  ) {
+    return ACTION_COLORS[7];
+  }
+
+  return ACTION_COLORS[8];
 }
 
 function getMondayOfWeek(date) {
@@ -189,19 +275,16 @@ function getAvailableBoardHeight() {
   const wrapHeight = wrap.clientHeight || 700;
   const headHeight = thead.offsetHeight || 25;
 
-  // Small buffer so the last row does not kiss the footer/bottom border.
   return Math.max(250, wrapHeight - headHeight - 10);
 }
 
 function estimateRowHeight(staffId) {
   const maxAssignments = getMaxAssignmentsForStaffInWeek(staffId);
 
-  // Empty rows can be smaller.
   if (maxAssignments <= 0) {
     return 54;
   }
 
-  // Assignment chips are intentionally readable on TV.
   const chipHeight = 39;
   const gap = 3;
   const cellPadding = 10;
@@ -226,8 +309,6 @@ function buildStaffPages() {
   staff.forEach(s => {
     let rowHeight = estimateRowHeight(s.id);
 
-    // If one person somehow has too many chips, keep the row on its own page
-    // and cap the height so it does not wreck the full screen.
     rowHeight = Math.min(rowHeight, availableHeight);
 
     const rowPackage = {
@@ -516,10 +597,10 @@ function renderLegend() {
 
   if (!legend) return;
 
-  legend.innerHTML = UNITS.map(u => `
+  legend.innerHTML = ACTION_COLORS.map(a => `
     <div class="tv-legend-item">
-      <span class="tv-legend-dot" style="background:${u.color}"></span>
-      <span>${escapeHtml(u.label)}</span>
+      <span class="tv-legend-dot" style="background:${a.color}"></span>
+      <span>${escapeHtml(a.label)}</span>
     </div>
   `).join("");
 }
@@ -550,7 +631,7 @@ function renderBoard() {
       <tr style="--row-height:${rowHeight}px">
         <td class="tv-staff-cell" style="--row-height:${rowHeight}px">
           <div class="tv-staff-inner">
-            <div class="tv-unit-bar" style="background:${u.color}"></div>
+            <div class="tv-unit-bar" style="background:#D9E2EC"></div>
             <div class="tv-staff-text">
               <div class="tv-staff-name">${escapeHtml(s.name)}</div>
               <div class="tv-staff-unit">${escapeHtml(u.label)}</div>
@@ -564,7 +645,7 @@ function renderBoard() {
 
           return `
             <td class="${isToday(day) ? "today-cell" : ""}" style="--row-height:${rowHeight}px">
-              ${renderAssignmentCell(dayAssignments, u)}
+              ${renderAssignmentCell(dayAssignments)}
             </td>
           `;
         }).join("")}
@@ -573,7 +654,7 @@ function renderBoard() {
   }).join("");
 }
 
-function renderAssignmentCell(dayAssignments, unit) {
+function renderAssignmentCell(dayAssignments) {
   if (!dayAssignments.length) {
     return `<div class="tv-empty"></div>`;
   }
@@ -584,13 +665,17 @@ function renderAssignmentCell(dayAssignments, unit) {
 
   return `
     <div class="tv-cell-stack">
-      ${visible.map(a => `
-        <div class="tv-assignment" style="background:${unit.bg};border-left-color:${unit.color};color:${unit.color}">
-          <div class="tv-assignment-role">${escapeHtml(a.role || "—")}</div>
-          <div class="tv-assignment-loc">${escapeHtml(a.location || "—")}</div>
-          ${a.note ? `<div class="tv-assignment-note">${escapeHtml(a.note)}</div>` : ""}
-        </div>
-      `).join("")}
+      ${visible.map(a => {
+        const action = actionMeta(a.role, a.location);
+
+        return `
+          <div class="tv-assignment" style="background:${action.bg};border-left-color:${action.color};color:${action.color}">
+            <div class="tv-assignment-role">${escapeHtml(a.role || "—")}</div>
+            <div class="tv-assignment-loc">${escapeHtml(a.location || "—")}</div>
+            ${a.note ? `<div class="tv-assignment-note">${escapeHtml(a.note)}</div>` : ""}
+          </div>
+        `;
+      }).join("")}
 
       ${hiddenCount > 0 ? `
         <div class="tv-more">+${hiddenCount} more</div>
