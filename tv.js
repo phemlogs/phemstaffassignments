@@ -5,6 +5,7 @@
 // Dynamic pagination: automatically pushes staff to next page if they do not fit
 // Rotation: staff pages → announcements → QR → shifts → repeat
 // Assignment chips are colored by ACTION, not staff/unit
+// Bottom cutoff fix: leaves extra safety space so last staff row does not get chopped
 // ─────────────────────────────────────────────
 
 const DAY_SHORT = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
@@ -13,7 +14,7 @@ const DAY_SHORT = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 // 10 minutes: 10 * 60 * 1000
 // 2 minutes:  2 * 60 * 1000
 // 1 minute:   1 * 60 * 1000
-const AUTO_REFRESH_MS = 2 * 60 * 1000;
+const AUTO_REFRESH_MS = 10 * 60 * 1000;
 
 const BOARD_VIEW_MS = 32 * 1000;
 const ANNOUNCEMENT_VIEW_MS = 14 * 1000;
@@ -275,14 +276,16 @@ function getAvailableBoardHeight() {
   const wrapHeight = wrap.clientHeight || 700;
   const headHeight = thead.offsetHeight || 25;
 
-  return Math.max(250, wrapHeight - headHeight - 10);
+  // Safety buffer so the last staff row does not get cut off on the TV.
+  // TVs/browsers often report usable height a little too generously.
+  return Math.max(250, wrapHeight - headHeight - 95);
 }
 
 function estimateRowHeight(staffId) {
   const maxAssignments = getMaxAssignmentsForStaffInWeek(staffId);
 
   if (maxAssignments <= 0) {
-    return 54;
+    return 68;
   }
 
   const chipHeight = 39;
@@ -296,7 +299,7 @@ function estimateRowHeight(staffId) {
     cellPadding +
     staffPadding;
 
-  return Math.max(62, assignmentHeight);
+  return Math.max(74, assignmentHeight);
 }
 
 function buildStaffPages() {
